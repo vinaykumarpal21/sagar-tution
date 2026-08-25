@@ -60,8 +60,15 @@ function seedData() {
     LS.set(KEY.staff, [
       { id: 'T001', name: 'Sagar Sir',       dept: 'Mathematics',  img: 'https://i.pravatar.cc/100?img=57', addedAt: Date.now() },
       { id: 'T002', name: 'Pooja Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
-      { id: 'T003', name: 'Rahul Sir',       dept: 'English',      img: 'https://i.pravatar.cc/100?img=59', addedAt: Date.now() },
-      { id: 'T004', name: 'Anita Ma\'am',    dept: 'Social Science',img: 'https://i.pravatar.cc/100?img=49', addedAt: Date.now() },
+      { id: 'T003', name: 'Pratibha Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
+      { id: 'T004', name: 'Pranjal Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
+      { id: 'T005', name: 'Poorva Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
+      { id: 'T006', name: 'Sanvi Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
+      { id: 'T007', name: 'prachi Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
+      { id: 'T008', name: 'Pooja Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
+
+      { id: 'T009', name: 'Rahul Sir',       dept: 'English',      img: 'https://i.pravatar.cc/100?img=59', addedAt: Date.now() },
+      { id: 'T0010', name: 'Anita Ma\'am',    dept: 'Social Science',img: 'https://i.pravatar.cc/100?img=49', addedAt: Date.now() },
     ]);
   }
   if (!LS.get(KEY.toppers)) {
