@@ -66,7 +66,6 @@ function seedData() {
       { id: 'T006', name: 'Sanvi Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
       { id: 'T007', name: 'prachi Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
       { id: 'T008', name: 'Pooja Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
-
       { id: 'T009', name: 'Rahul Sir',       dept: 'English',      img: 'https://i.pravatar.cc/100?img=59', addedAt: Date.now() },
       { id: 'T0010', name: 'Anita Ma\'am',    dept: 'Social Science',img: 'https://i.pravatar.cc/100?img=49', addedAt: Date.now() },
     ]);
