@@ -372,12 +372,12 @@
             <section id="academic" class="view">
                 <div class="section-header-box">
                     <div>
-                        <h2 class="section-title" style="margin:0;"><i class="ri-emotion-happy-fill" style="color:#818cf8"></i> Student Daily Attendance</h2>
-                        <p style="color:var(--text-muted); font-size:0.85rem; margin-top: 4px;">Note: Student attendance can strictly be updated for <b>Today's Date only</b>.</p>
+                        <h2 class="section-title" style="margin:0;"><i class="ri-emotion-happy-fill" style="color:#818cf8"></i> Student Attendance Portal</h2>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-top: 4px;">Log in to mark your daily attendance and view your attendance calendar.</p>
                     </div>
-                    <div class="welcome-badge"><i class="ri-calendar-check-fill" style="color:#34d399"></i> Date: <span id="studentCurrentDateText">--</span></div>
+                    <div class="welcome-badge"><i class="ri-calendar-check-fill" style="color:#34d399"></i> Current Date: <span id="studentCurrentDateText">--</span></div>
                 </div>
-                <div class="large-classes-grid" id="studentDisplay"></div>
+                <div id="studentDisplay"></div>
             </section>
 
             <!-- 6. STAFF ATTENDANCE PORTAL -->
@@ -589,7 +589,6 @@
                             <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600; align-self:center; white-space:nowrap;"><i class="ri-cloud-download-fill" style="color:#818cf8"></i> Download:</span>
                             <button class="p-btn admin-toolbar-btn" id="exportExcelBtn"><i class="ri-file-excel-fill" style="color:#34d399"></i> Excel</button>
                             <button class="p-btn admin-toolbar-btn" id="exportPdfBtn"><i class="ri-file-pdf-fill" style="color:#f87171"></i> PDF</button>
-                            <button class="p-btn admin-toolbar-btn" id="exportCsvBtn" style="background:rgba(56,189,248,0.1);color:var(--accent-secondary);border-color:rgba(56,189,248,0.3);"><i class="ri-file-chart-fill" style="color:#38bdf8"></i> CSV</button>
                         </div>
                     </div>
 
@@ -634,8 +633,8 @@
                             </div>
                             <select id="historyTypeFilter" style="min-width:160px;">
                                 <option value="all">All Types</option>
-                                <option value="student">Student Only</option>
-                                <option value="staff">Staff Only</option>
+                                <option value="student">Students Data</option>
+                                <option value="staff">Staff Data</option>
                             </select>
                         </div>
                         <div class="history-cards-grid" id="historyCardsGrid"></div>
@@ -656,7 +655,7 @@
             <i class="ri-lock-2-fill modal-lock-icon" style="color:#6366f1"></i>
             <h3 class="modal-title">Admin Access PIN</h3>
             <p class="modal-subtext">Enter PIN code to open master panel</p>
-            <input type="password" id="pinInput" placeholder="****" inputmode="numeric" maxlength="4">
+            <input type="password" id="pinInput" placeholder="*****" inputmode="numeric" maxlength="5" style="text-align:center;letter-spacing:0.4em;font-size:1.5rem;font-weight:700;">
 
             <button class="main-btn modal-unlock-btn" id="unlockAdminBtn">Unlock Admin Panel</button>
             <button class="p-btn modal-back-btn" id="modalBackBtn"><i class="ri-corner-up-left-fill" style="color:#818cf8"></i> Back to Home</button>

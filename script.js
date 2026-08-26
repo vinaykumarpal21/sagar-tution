@@ -66,6 +66,7 @@ function seedData() {
       { id: 'T006', name: 'Sanvi Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
       { id: 'T007', name: 'prachi Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
       { id: 'T008', name: 'Pooja Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
+
       { id: 'T009', name: 'Rahul Sir',       dept: 'English',      img: 'https://i.pravatar.cc/100?img=59', addedAt: Date.now() },
       { id: 'T0010', name: 'Anita Ma\'am',    dept: 'Social Science',img: 'https://i.pravatar.cc/100?img=49', addedAt: Date.now() },
     ]);
@@ -370,71 +371,178 @@ function renderToppers() {
 }
 
 /* ──────────────────────────────────────────
-   12. STUDENT ATTENDANCE SECTION (Public)
+   12. STUDENT ATTENDANCE SECTION (Login-gated, mirrors Staff Portal)
 ────────────────────────────────────────── */
+let _studentLoggedIn = null; // { id, name, class, rollNo, img }
+let _studentCalMonth = null; // current viewed month "YYYY-MM"
+
 function renderStudentAttendanceSection() {
-  const display = el('studentDisplay');
+  const display  = el('studentDisplay');
   const dateText = el('studentCurrentDateText');
   if (dateText) dateText.textContent = formatDate(todayStr());
   if (!display) return;
 
-  const students = LS.get(KEY.students, []);
-  const attendance = LS.get(KEY.attendance, {});
-  const today = todayStr();
-
-  if (!students.length) {
-    display.innerHTML = `<div class="empty-state"><i class="ri-user-unfollow-fill" style="color:#818cf8;font-size:2.5rem;display:block;margin-bottom:0.5rem"></i><p>No students enrolled yet.</p></div>`;
-    return;
+  if (_studentLoggedIn) {
+    renderStudentPortal(display);
+  } else {
+    renderStudentLogin(display);
   }
+}
 
-  // Group by class
-  const byClass = {};
-  students.forEach(s => {
-    if (!byClass[s.class]) byClass[s.class] = [];
-    byClass[s.class].push(s);
+function renderStudentLogin(container) {
+  container.innerHTML = `
+    <div class="student-login-card">
+      <div class="student-login-head">
+        <i class="ri-user-lock-fill" style="color:#6366f1;font-size:2.5rem;display:block"></i>
+        <h3>Student Attendance Portal</h3>
+        <p>Login securely with your Name and Standard.</p>
+      </div>
+      <div class="student-login-fields">
+        <div>
+          <label class="form-label"><i class="ri-account-circle-line"></i> Full Name</label>
+          <input type="text" id="loginStudentName" class="pill-input" placeholder="e.g. Aarav Sharma">
+        </div>
+        <div>
+          <label class="form-label"><i class="ri-book-open-line"></i> Standard / Class</label>
+          <select id="loginStudentClass" class="pill-input">
+            <option value="">Select Standard</option>
+            ${[1,2,3,4,5,6,7,8,9,10,11,12].map(n => `<option value="${n}">Class ${n}</option>`).join('')}
+          </select>
+        </div>
+        <button class="p-btn animate-hover-up" id="studentLoginBtn" style="width:100%;margin-top:0.5rem">
+          <i class="ri-login-box-fill" style="color:#6366f1"></i> Login & View Calendar
+        </button>
+      </div>
+    </div>`;
+
+  el('studentLoginBtn')?.addEventListener('click', () => {
+    const name = (el('loginStudentName')?.value || '').trim();
+    const cls  = el('loginStudentClass')?.value || '';
+    if (!name || !cls) { toast('Please enter your name and select your class.', 'warn'); return; }
+
+    const students = LS.get(KEY.students, []);
+    const found    = students.find(s => s.name.toLowerCase() === name.toLowerCase() && s.class === cls);
+    if (!found) { toast('Student not found. Please check your name and class or contact admin.', 'error'); return; }
+
+    _studentLoggedIn = found;
+    _studentCalMonth = currentMonthKey();
+    renderStudentAttendanceSection();
+    toast(`Welcome, ${found.name}! 👋`, 'success');
   });
+}
 
-  display.innerHTML = Object.keys(byClass).sort((a, b) => Number(a) - Number(b)).map(cls => {
-    const classStudents = byClass[cls];
-    const rows = classStudents.map(s => {
-      const key = `${today}|${s.id}`;
-      const status = attendance[key] || 'unmarked';
-      const statusHtml = status === 'present'
-        ? `<span class="status-pill status-present"><i class="ri-checkbox-circle-fill"></i> Present</span>`
-        : status === 'absent'
-        ? `<span class="status-pill status-absent"><i class="ri-close-circle-fill"></i> Absent</span>`
-        : `<span class="status-pill" style="background:rgba(139,156,191,0.15);color:var(--text-muted);border:1px solid rgba(139,156,191,0.2)"><i class="ri-time-line"></i> Unmarked</span>`;
-      return `
-        <div class="search-result-item" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0;border-bottom:1px solid var(--glass-border);">
-          <img src="${s.img || 'https://i.pravatar.cc/100?img=1'}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);flex-shrink:0" alt="${s.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">
-          <div style="flex:1;min-width:0">
-            <strong style="display:block;font-size:0.875rem">${s.name}</strong>
-            <span style="font-size:0.75rem;color:var(--text-muted)">Roll No: ${s.rollNo || '—'}</span>
-          </div>
-          ${statusHtml}
-        </div>`;
-    }).join('');
+function renderStudentPortal(container) {
+  const s        = _studentLoggedIn;
+  const today    = todayStr();
+  const attObj   = LS.get(KEY.attendance, {});
+  const todayKey = `${today}|${s.id}`;
+  const todayStatus = attObj[todayKey];
 
-    const present = classStudents.filter(s => attendance[`${today}|${s.id}`] === 'present').length;
-    const absent  = classStudents.filter(s => attendance[`${today}|${s.id}`] === 'absent').length;
-    const pct     = classStudents.length ? Math.round((present / classStudents.length) * 100) : 0;
+  const checkinArea = todayStatus
+    ? `<div class="checkin-status-box">
+         <span class="status-pill ${todayStatus === 'present' ? 'status-present' : 'status-absent'}">
+           <i class="${todayStatus === 'present' ? 'ri-checkbox-circle-fill' : 'ri-close-circle-fill'}"></i>
+           ${todayStatus === 'present' ? 'Present Today' : 'Absent Today'}
+         </span>
+       </div>`
+    : `<div class="checkin-btn-row">
+         <button class="main-btn animate-hover-up" id="studentMarkPresentBtn" style="padding:8px 18px;font-size:0.8rem">
+           <i class="ri-check-fill" style="color:#a5b4fc"></i> Mark Present
+         </button>
+         <button class="a-btn animate-hover-up" id="studentMarkAbsentBtn" style="padding:8px 18px;font-size:0.8rem">
+           <i class="ri-close-fill" style="color:#fca5a5"></i> Mark Absent
+         </button>
+       </div>`;
 
-    return `
-      <div class="class-card-large" style="padding:1.25rem;display:flex;flex-direction:column;gap:0.75rem">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap">
-          <h3 style="font-size:0.95rem;font-weight:700;display:flex;align-items:center;gap:0.4rem">
-            <i class="ri-graduation-cap-fill" style="color:#818cf8"></i> Class ${cls}
-            <span style="font-size:0.75rem;font-weight:500;color:var(--text-muted)">(${classStudents.length} Students)</span>
-          </h3>
-          <div style="display:flex;gap:0.5rem;font-size:0.75rem;font-weight:600">
-            <span style="color:#34d399"><i class="ri-user-follow-fill"></i> ${present} Present</span>
-            <span style="color:#f87171"><i class="ri-user-unfollow-fill"></i> ${absent} Absent</span>
-            <span style="color:#38bdf8"><i class="ri-percent-fill"></i> ${pct}%</span>
+  container.innerHTML = `
+    <div class="student-portal-card">
+      <div class="student-portal-head">
+        <div class="student-portal-id">
+          <img src="${s.img || 'https://i.pravatar.cc/100?img=1'}" alt="${s.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">
+          <div>
+            <h3>${s.name}</h3>
+            <p class="muted-small"><i class="ri-graduation-cap-fill" style="color:#818cf8"></i> Class ${s.class} · Roll No: ${s.rollNo || '—'}</p>
           </div>
         </div>
-        <div>${rows}</div>
-      </div>`;
-  }).join('');
+        <button class="a-btn" id="studentLogoutBtn"><i class="ri-logout-box-r-fill" style="color:#f87171"></i> Logout</button>
+      </div>
+
+      <div class="student-checkin-box">
+        <p class="muted-small"><i class="ri-calendar-2-fill" style="color:#38bdf8"></i> Today: ${formatDate(today)}</p>
+        ${checkinArea}
+      </div>
+
+      <div class="student-calendar-box">
+        <div class="student-calendar-nav">
+          <button class="p-btn calendar-nav-btn" id="studentCalPrevBtn"><i class="ri-arrow-left-s-line"></i> Prev</button>
+          <h4 id="studentCalTitle">${formatMonthYear(_studentCalMonth)}</h4>
+          <button class="p-btn calendar-nav-btn" id="studentCalNextBtn">Next <i class="ri-arrow-right-s-line"></i></button>
+        </div>
+        <div class="student-calendar-weekdays">
+          <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+        </div>
+        <div id="studentCalGrid" class="student-calendar-grid"></div>
+      </div>
+    </div>`;
+
+  renderStudentCalendar();
+
+  el('studentLogoutBtn')?.addEventListener('click', () => {
+    _studentLoggedIn = null;
+    _studentCalMonth = null;
+    renderStudentAttendanceSection();
+    navigateTo('home');
+    toast('Logged out successfully.', 'info');
+  });
+
+  el('studentMarkPresentBtn')?.addEventListener('click', () => studentMarkAttendance('present'));
+  el('studentMarkAbsentBtn')?.addEventListener('click', ()  => studentMarkAttendance('absent'));
+
+  el('studentCalPrevBtn')?.addEventListener('click', () => {
+    const [y, m] = _studentCalMonth.split('-').map(Number);
+    const d = new Date(y, m - 2, 1);
+    _studentCalMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    el('studentCalTitle').textContent = formatMonthYear(_studentCalMonth);
+    renderStudentCalendar();
+  });
+  el('studentCalNextBtn')?.addEventListener('click', () => {
+    const [y, m] = _studentCalMonth.split('-').map(Number);
+    const d = new Date(y, m, 1);
+    _studentCalMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    el('studentCalTitle').textContent = formatMonthYear(_studentCalMonth);
+    renderStudentCalendar();
+  });
+}
+
+function studentMarkAttendance(status) {
+  if (!_studentLoggedIn) return;
+  const key    = `${todayStr()}|${_studentLoggedIn.id}`;
+  const attObj = LS.get(KEY.attendance, {});
+  attObj[key]  = status;
+  LS.set(KEY.attendance, attObj);
+  toast(`Marked ${status === 'present' ? 'Present ✓' : 'Absent ✗'} for today!`, status === 'present' ? 'success' : 'warn');
+  renderStudentAttendanceSection();
+}
+
+function renderStudentCalendar() {
+  const grid = el('studentCalGrid');
+  if (!grid || !_studentCalMonth || !_studentLoggedIn) return;
+  const attObj = LS.get(KEY.attendance, {});
+  const [y, m] = _studentCalMonth.split('-').map(Number);
+  const firstDay = new Date(y, m - 1, 1).getDay();
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const today = todayStr();
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const key     = `${dateStr}|${_studentLoggedIn.id}`;
+    const status  = attObj[key];
+    const isToday = dateStr === today;
+    const cls     = status === 'present' ? 'cal-present' : status === 'absent' ? 'cal-absent' : isToday ? 'cal-today' : '';
+    html += `<div class="cal-day ${cls}" title="${dateStr}">${d}</div>`;
+  }
+  grid.innerHTML = html;
 }
 
 /* ──────────────────────────────────────────
@@ -517,8 +625,12 @@ function renderStaffPortalSection() {
 }
 
 function renderStaffLogin(container) {
-  const staffList = LS.get(KEY.staff, []);
-  const depts = [...new Set(staffList.map(s => s.dept))];
+  const STAFF_DEPTS = [
+    'Class 1 - 8',
+    'Class 9 - 10',
+    'Class 11 - 12 (Science)',
+    'Class 11 - 12 (Commerce)',
+  ];
   container.innerHTML = `
     <div class="student-login-card staff-login-card">
       <div class="student-login-head">
@@ -535,7 +647,7 @@ function renderStaffLogin(container) {
           <label class="form-label"><i class="ri-team-fill"></i> Department</label>
           <select id="loginStaffDepartment" class="pill-input">
             <option value="">Select Department</option>
-            ${depts.map(d => `<option value="${d}">${d}</option>`).join('')}
+            ${STAFF_DEPTS.map(d => `<option value="${d}">${d}</option>`).join('')}
           </select>
         </div>
         <button class="p-btn animate-hover-up" id="staffLoginBtn" style="width:100%;margin-top:0.5rem">
@@ -550,10 +662,11 @@ function renderStaffLogin(container) {
     if (!name || !dept) { toast('Please enter your name and select department.', 'warn'); return; }
 
     const staff = LS.get(KEY.staff, []);
-    const found = staff.find(s => s.name.toLowerCase() === name.toLowerCase() && s.dept === dept);
+    const found = staff.find(s => s.name.toLowerCase() === name.toLowerCase());
     if (!found) { toast('Staff member not found. Contact admin.', 'error'); return; }
 
-    _staffLoggedIn  = found;
+    // Store selected department from login form alongside other staff data
+    _staffLoggedIn  = { ...found, loginDept: dept };
     _staffCalMonth  = currentMonthKey();
     renderStaffPortalSection();
     toast(`Welcome, ${found.name}! 👋`, 'success');
@@ -618,7 +731,9 @@ function renderStaffPortal(container) {
 
   el('staffLogoutBtn')?.addEventListener('click', () => {
     _staffLoggedIn = null;
+    _staffCalMonth = null;
     renderStaffPortalSection();
+    navigateTo('home');
     toast('Logged out successfully.', 'info');
   });
 
@@ -674,7 +789,7 @@ function renderStaffCalendar() {
 /* ──────────────────────────────────────────
    15. ADMIN — PIN / MODAL
 ────────────────────────────────────────── */
-const ADMIN_PIN = '1234'; // default pin
+const ADMIN_PIN = '12345'; // default pin
 
 function openAdminModal() {
   const modal = el('loginModal');
@@ -755,6 +870,7 @@ const TAB_CONFIG = {
       el('inpName').placeholder = 'Student Full Name';
       el('inpD1').placeholder   = 'Class (e.g. 10)';
       el('inpD2').placeholder   = 'Roll No';
+      el('inpD2').style.display = '';
       el('adminMediaRow').style.display = '';
     },
     getRecord: () => ({ name: el('inpName').value.trim(), class: el('inpD1').value.trim(), rollNo: el('inpD2').value.trim(), img: el('tempImg').value }),
@@ -774,10 +890,11 @@ const TAB_CONFIG = {
     formSetup: () => {
       el('inpName').placeholder = 'Staff Full Name';
       el('inpD1').placeholder   = 'Department';
-      el('inpD2').placeholder   = 'Role / Designation';
+      el('inpD2').placeholder   = '(Not used for staff)';
+      el('inpD2').style.display = 'none';
       el('adminMediaRow').style.display = '';
     },
-    getRecord: () => ({ name: el('inpName').value.trim(), dept: el('inpD1').value.trim(), role: el('inpD2').value.trim(), img: el('tempImg').value }),
+    getRecord: () => ({ name: el('inpName').value.trim(), dept: el('inpD1').value.trim(), img: el('tempImg').value }),
     validate: r => r.name && r.dept,
     rowCells: r => [
       `<img src="${r.img || 'https://i.pravatar.cc/100?img=1'}" alt="${r.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">`,
@@ -788,12 +905,13 @@ const TAB_CONFIG = {
     label: 'Student Attendance',
     icon:  'ri-user-follow-fill',
     key:   KEY.attendance,
-    cols:  ['Date', 'Student', 'Class', 'Status'],
+    cols:  ['Student Name', 'Std'],
     formTitle: 'Mark Student Attendance',
     formSetup: () => {
       el('inpName').placeholder = 'Student Name (search)';
       el('inpD1').placeholder   = 'Date (YYYY-MM-DD)';
       el('inpD2').placeholder   = 'Status: present / absent';
+      el('inpD2').style.display = '';
       el('adminMediaRow').style.display = 'none';
     },
     getRecord: () => ({
@@ -813,6 +931,7 @@ const TAB_CONFIG = {
       el('inpName').placeholder = 'Staff Name (search)';
       el('inpD1').placeholder   = 'Date (YYYY-MM-DD)';
       el('inpD2').placeholder   = 'Status: present / absent';
+      el('inpD2').style.display = '';
       el('adminMediaRow').style.display = 'none';
     },
     getRecord: () => ({
@@ -832,6 +951,7 @@ const TAB_CONFIG = {
       el('inpName').placeholder = 'Student Full Name';
       el('inpD1').placeholder   = 'Class (e.g. 10)';
       el('inpD2').placeholder   = 'Score / Percentage';
+      el('inpD2').style.display = '';
       el('adminMediaRow').style.display = '';
     },
     getRecord: () => ({ name: el('inpName').value.trim(), class: el('inpD1').value.trim(), score: el('inpD2').value.trim(), img: el('tempImg').value }),
@@ -851,6 +971,7 @@ const TAB_CONFIG = {
       el('inpName').placeholder = 'Event Name';
       el('inpD1').placeholder   = 'Category (e.g. Picnic)';
       el('inpD2').placeholder   = 'Description';
+      el('inpD2').style.display = '';
       el('adminMediaRow').style.display = '';
     },
     getRecord: () => ({ name: el('inpName').value.trim(), category: el('inpD1').value.trim(), desc: el('inpD2').value.trim(), img: el('tempImg').value }),
@@ -870,6 +991,7 @@ const TAB_CONFIG = {
       el('inpName').placeholder = 'Notice Text (full)';
       el('inpD1').placeholder   = 'Priority (optional)';
       el('inpD2').placeholder   = 'Expiry Date (optional)';
+      el('inpD2').style.display = '';
       el('adminMediaRow').style.display = 'none';
     },
     getRecord: () => ({ text: el('inpName').value.trim(), priority: el('inpD1').value.trim(), expiry: el('inpD2').value.trim() }),
@@ -1065,13 +1187,16 @@ function renderAdminTable() {
 
   tbody.innerHTML = data.map(r => {
     let cells;
-    if (_currentTab === 'attendance' || _currentTab === 'staffAttendance') {
+    if (_currentTab === 'attendance') {
+      // Restricted view: only Student Name and Std
+      cells = [r.personName, r.extra];
+    } else if (_currentTab === 'staffAttendance') {
       cells = [r.date, r.personName, r.extra, r.status];
     } else {
       cells = cfg.rowCells ? cfg.rowCells(r) : cols.map(c => r[c] || '—');
     }
 
-    const statusCell = _currentTab === 'attendance' || _currentTab === 'staffAttendance'
+    const statusCell = _currentTab === 'staffAttendance'
       ? cells.map((c, i) => i === 3
           ? `<td>${c === 'present'
               ? `<span class="status-pill status-present" style="font-size:0.72rem"><i class="ri-checkbox-circle-fill"></i> Present</span>`
@@ -1103,9 +1228,13 @@ function renderAdminTable() {
     });
   });
 
-  // Edit buttons
+  // Edit buttons — scroll to the admin form at the top
   tbody.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', () => editRecord(btn.dataset.id));
+    btn.addEventListener('click', () => {
+      editRecord(btn.dataset.id);
+      const adminForm = el('adminForm');
+      if (adminForm) adminForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   });
 
   // Delete buttons
@@ -1261,7 +1390,7 @@ function initSearchSort() {
 function initExport() {
   el('exportExcelBtn')?.addEventListener('click', exportExcel);
   el('exportPdfBtn')?.addEventListener('click', exportPDF);
-  el('exportCsvBtn')?.addEventListener('click', exportCSV);
+  // CSV button removed per requirements
 }
 
 function getExportData() {
@@ -1454,12 +1583,20 @@ function renderHistory() {
           </div>
         </div>
         <div class="history-card-actions">
-          ${showStudent ? `<button class="history-excel-btn" onclick="exportHistoryExcel('${h.id}','student')" title="Student Excel">
-            <i class="ri-file-excel-2-fill" style="color:#34d399"></i> Student
-          </button>` : ''}
-          ${showStaff ? `<button class="history-pdf-btn" onclick="exportHistoryExcel('${h.id}','staff')" title="Staff Excel">
-            <i class="ri-file-excel-2-fill" style="color:#a78bfa"></i> Staff
-          </button>` : ''}
+          ${showStudent ? `
+            <button class="history-excel-btn" onclick="exportHistoryExcel('${h.id}','student')" title="Students Data Excel">
+              <i class="ri-file-excel-2-fill" style="color:#34d399"></i> Students Data
+            </button>
+            <button class="history-pdf-btn" onclick="exportHistoryPDF('${h.id}','student')" title="Students Data PDF">
+              <i class="ri-file-pdf-2-fill" style="color:#f87171"></i> PDF
+            </button>` : ''}
+          ${showStaff ? `
+            <button class="history-excel-btn" onclick="exportHistoryExcel('${h.id}','staff')" title="Staff Data Excel">
+              <i class="ri-file-excel-2-fill" style="color:#a78bfa"></i> Staff Data
+            </button>
+            <button class="history-pdf-btn" onclick="exportHistoryPDF('${h.id}','staff')" title="Staff Data PDF">
+              <i class="ri-file-pdf-2-fill" style="color:#f87171"></i> PDF
+            </button>` : ''}
           <button class="history-delete-btn" onclick="deleteHistory('${h.id}')" title="Delete Archive">
             <i class="ri-delete-bin-5-fill" style="color:#f87171"></i>
           </button>
@@ -1473,7 +1610,7 @@ function renderHistory() {
             <span class="history-pct-badge">${sPct}%</span>
           </div>
           <div class="history-stat-num">${h.studentCount}</div>
-          <div class="history-stat-label-text">Students</div>
+          <div class="history-stat-label-text">Students Data</div>
           <div class="history-mini-pills">
             <span class="history-mini-pill history-mini-pill-present"><i class="ri-check-fill"></i> ${h.studentPresent}</span>
             <span class="history-mini-pill history-mini-pill-absent"><i class="ri-close-fill"></i> ${h.studentAbsent}</span>
@@ -1485,7 +1622,7 @@ function renderHistory() {
             <span class="history-pct-badge">${tPct}%</span>
           </div>
           <div class="history-stat-num">${h.staffCount}</div>
-          <div class="history-stat-label-text">Staff Members</div>
+          <div class="history-stat-label-text">Staff Data</div>
           <div class="history-mini-pills">
             <span class="history-mini-pill history-mini-pill-present"><i class="ri-check-fill"></i> ${h.staffPresent}</span>
             <span class="history-mini-pill history-mini-pill-absent"><i class="ri-close-fill"></i> ${h.staffAbsent}</span>
@@ -1539,6 +1676,32 @@ window.toggleHistoryPreview = function (btn, id) {
   panel.innerHTML = makeTable(h.studentData, 'Student Attendance', '#818cf8') + makeTable(h.staffData, 'Staff Attendance', '#34d399');
   panel.style.display = '';
   btn.innerHTML = '<i class="ri-eye-off-fill"></i> Hide Preview';
+};
+
+window.exportHistoryPDF = function (id, type) {
+  try {
+    if (!window.jspdf) { toast('jsPDF library not loaded.', 'error'); return; }
+    const { jsPDF } = window.jspdf;
+    const history = LS.get(KEY.history, []);
+    const h       = history.find(x => x.id === id);
+    if (!h) return;
+
+    const data    = type === 'staff' ? h.staffData : h.studentData;
+    const headers = ['Name', 'Dept / Class', 'Present', 'Absent', 'Total Days', '% Attendance'];
+    const rows    = (data || []).map(r => [r.name, r.dept, r.present, r.absent, r.total, `${r.pct}%`]);
+    const label   = type === 'staff' ? 'Staff Data' : 'Students Data';
+
+    const doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(`Sagar Classes — ${h.label} — ${label}`, 14, 14);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 14, 20);
+    doc.autoTable({ head: [headers], body: rows, startY: 26, styles: { fontSize: 9 }, headStyles: { fillColor: [99, 102, 241] } });
+    doc.save(`${type}_attendance_${h.monthKey}.pdf`);
+    toast(`${label} PDF downloaded! 📑`, 'success');
+  } catch (e) { toast('PDF export failed: ' + e.message, 'error'); }
 };
 
 window.deleteHistory = function (id) {
