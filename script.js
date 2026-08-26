@@ -789,7 +789,7 @@ function renderStaffCalendar() {
 /* ──────────────────────────────────────────
    15. ADMIN — PIN / MODAL
 ────────────────────────────────────────── */
-const ADMIN_PIN = '12345'; // default pin
+const ADMIN_PIN = '91206'; // default pin
 
 function openAdminModal() {
   const modal = el('loginModal');
