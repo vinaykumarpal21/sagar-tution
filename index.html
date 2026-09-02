@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sagar Classes</title>
     <!-- Remix Icons & Google Fonts -->
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.9.0/fonts/remixicon.css" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -447,6 +447,7 @@
                             <span class="badge-tag">Main Office</span>
                         </div>
                         <iframe class="map-frame" src="https://maps.google.com/maps?q=Nirmal%20Anand%20Nagar%20Manorama%20Nagar%20Kolshet%20Road%20Thane%20West&t=&z=15&ie=UTF8&iwloc=&output=embed" allowfullscreen="" loading="lazy" title="Branch 1 Map"></iframe>
+                        <a href="https://maps.app.goo.gl/RbQ19aM1nqzBzStr6" target="_blank" rel="noopener" class="contact-btn btn-call" style="margin-top:0.75rem"><i class="ri-map-pin-line"></i> Open in Google Maps</a>
                     </div>
                 </div>
 
@@ -485,6 +486,7 @@
                             <span class="badge-tag badge-tag-blue">Branch 2</span>
                         </div>
                         <iframe class="map-frame" src="https://maps.google.com/maps?q=Manpada%20Thane%20West&t=&z=15&ie=UTF8&iwloc=&output=embed" allowfullscreen="" loading="lazy" title="Branch 2 Map"></iframe>
+                        <a href="https://maps.app.goo.gl/rWC7fJsqzp1eMkRH7?g_st=ac" target="_blank" rel="noopener" class="contact-btn btn-call" style="margin-top:0.75rem"><i class="ri-map-pin-line"></i> Open in Google Maps</a>
                     </div>
                 </div>
 
@@ -540,6 +542,9 @@
                         <input type="text" id="inpName" placeholder="Name / Event Title">
                         <input type="text" id="inpD1" placeholder="Class / Category">
                         <input type="text" id="inpD2" placeholder="Roll No / Percentage / Description">
+                        <select id="inpDept" class="pill-input" style="display:none">
+                            <option value="">Select Department</option>
+                        </select>
                     </div>
 
                     <div class="form-media-row" id="adminMediaRow">
@@ -653,9 +658,9 @@
         <div class="modal-content modal-relative">
             <button id="closeLoginModalBtn" class="modal-close-btn"><i class="ri-close-circle-fill" style="color:#f87171"></i></button>
             <i class="ri-lock-2-fill modal-lock-icon" style="color:#6366f1"></i>
-            <h3 class="modal-title">Admin Access PIN</h3>
-            <p class="modal-subtext">Enter PIN code to open master panel</p>
-            <input type="password" id="pinInput" placeholder="*****" inputmode="numeric" maxlength="5" style="text-align:center;letter-spacing:0.4em;font-size:1.5rem;font-weight:700;">
+            <h3 class="modal-title">Admin Access Password</h3>
+            <p class="modal-subtext">Enter the admin password to open master panel</p>
+            <input type="password" id="pinInput" placeholder="••••••••" maxlength="30" autocomplete="off" style="text-align:center;letter-spacing:0.2em;font-size:1.3rem;font-weight:700;">
 
             <button class="main-btn modal-unlock-btn" id="unlockAdminBtn">Unlock Admin Panel</button>
             <button class="p-btn modal-back-btn" id="modalBackBtn"><i class="ri-corner-up-left-fill" style="color:#818cf8"></i> Back to Home</button>

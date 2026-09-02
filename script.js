@@ -43,6 +43,28 @@ const KEY = {
 };
 
 /* ──────────────────────────────────────────
+   2b. DEPARTMENTS — single shared list so the
+   staff login screen and the admin panel are
+   always in sync on department names.
+────────────────────────────────────────── */
+const STAFF_DEPTS = [
+  'Class 1 - 8',
+  'Class 9 - 10',
+  'Class 11 - 12 (Science)',
+  'Class 11 - 12 (Commerce)',
+  'Mathematics',
+  'Science',
+  'English',
+  'Social Science',
+];
+
+function populateDeptSelect(selectEl, selected) {
+  if (!selectEl) return;
+  selectEl.innerHTML = `<option value="">Select Department</option>` +
+    STAFF_DEPTS.map(d => `<option value="${d}" ${d === selected ? 'selected' : ''}>${d}</option>`).join('');
+}
+
+/* ──────────────────────────────────────────
    3. SEED DEFAULT DATA (first run only)
 ────────────────────────────────────────── */
 function seedData() {
@@ -267,7 +289,7 @@ function renderHomeAchievers() {
   strip.innerHTML = toppers.map((t, i) => `
     <div class="achiever-chip animate-hover-up">
       <span class="achiever-rank">#${i + 1}</span>
-      <img src="${t.img || 'https://i.pravatar.cc/100?img=1'}" alt="${t.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">
+      <img src="${t.img || 'sagar.jpeg'}" alt="${t.name}" onerror="this.src='sagar.jpeg'">
       <div>
         <strong>${t.name}</strong>
         <span>Class ${t.class} · ${t.score}</span>
@@ -350,7 +372,7 @@ function renderToppers() {
     spotlight.innerHTML = `
       <div class="topper-spotlight">
         <div class="topper-spotlight-glow"></div>
-        <img class="topper-spotlight-photo" src="${t.img || 'https://i.pravatar.cc/100?img=1'}" alt="${t.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">
+        <img class="topper-spotlight-photo" src="${t.img || 'sagar.jpeg'}" alt="${t.name}" onerror="this.src='sagar.jpeg'">
         <div class="topper-spotlight-body">
           <span class="topper-spotlight-tag"><i class="ri-vip-crown-2-fill" style="color:#fbbf24"></i> Topper of the Term</span>
           <h2>${t.name}</h2>
@@ -363,7 +385,7 @@ function renderToppers() {
   display.innerHTML = toppers.map((t, i) => `
     <div class="facility-card topper-card animate-hover-up">
       <span class="topper-rank-badge">${rankBadges[i] || `#${i + 1}`}</span>
-      <img class="topper-photo" src="${t.img || 'https://i.pravatar.cc/100?img=1'}" alt="${t.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">
+      <img class="topper-photo" src="${t.img || 'sagar.jpeg'}" alt="${t.name}" onerror="this.src='sagar.jpeg'">
       <span class="notice-tag topper-standard-tag">Class ${t.class}</span>
       <h3>${t.name}</h3>
       <p class="topper-score">${t.score}</p>
@@ -458,7 +480,7 @@ function renderStudentPortal(container) {
     <div class="student-portal-card">
       <div class="student-portal-head">
         <div class="student-portal-id">
-          <img src="${s.img || 'https://i.pravatar.cc/100?img=1'}" alt="${s.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">
+          <img src="${s.img || 'sagar.jpeg'}" alt="${s.name}" onerror="this.src='sagar.jpeg'">
           <div>
             <h3>${s.name}</h3>
             <p class="muted-small"><i class="ri-graduation-cap-fill" style="color:#818cf8"></i> Class ${s.class} · Roll No: ${s.rollNo || '—'}</p>
@@ -591,7 +613,7 @@ function searchStudentAttendance() {
     return `
       <div class="search-result-item" style="flex-wrap:wrap;gap:0.5rem">
         <div style="display:flex;align-items:center;gap:0.75rem;flex:1;min-width:0">
-          <img src="${s.img || 'https://i.pravatar.cc/100?img=1'}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);flex-shrink:0" alt="${s.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">
+          <img src="${s.img || 'sagar.jpeg'}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);flex-shrink:0" alt="${s.name}" onerror="this.src='sagar.jpeg'">
           <div>
             <strong>${s.name}</strong>
             <span class="muted-small" style="display:block">Class ${s.class} · Roll No: ${s.rollNo || '—'}</span>
@@ -625,12 +647,6 @@ function renderStaffPortalSection() {
 }
 
 function renderStaffLogin(container) {
-  const STAFF_DEPTS = [
-    'Class 1 - 8',
-    'Class 9 - 10',
-    'Class 11 - 12 (Science)',
-    'Class 11 - 12 (Commerce)',
-  ];
   container.innerHTML = `
     <div class="student-login-card staff-login-card">
       <div class="student-login-head">
@@ -665,7 +681,13 @@ function renderStaffLogin(container) {
     const found = staff.find(s => s.name.toLowerCase() === name.toLowerCase());
     if (!found) { toast('Staff member not found. Contact admin.', 'error'); return; }
 
-    // Store selected department from login form alongside other staff data
+    // Keep attendance correctly synced to a department: the department
+    // chosen at login must match the one on record for this staff member.
+    if (found.dept !== dept) {
+      toast(`Department mismatch. ${found.name} is registered under "${found.dept}".`, 'error');
+      return;
+    }
+
     _staffLoggedIn  = { ...found, loginDept: dept };
     _staffCalMonth  = currentMonthKey();
     renderStaffPortalSection();
@@ -678,7 +700,7 @@ function renderStaffPortal(container) {
   const today  = todayStr();
   const attObj = LS.get(KEY.staffAttendance, {});
   const todayKey = `${today}|${s.id}`;
-  const todayStatus = attObj[todayKey];
+  const todayStatus = readAttendanceEntry(attObj[todayKey]).status;
 
   const checkinArea = todayStatus
     ? `<div class="checkin-status-box">
@@ -700,7 +722,7 @@ function renderStaffPortal(container) {
     <div class="student-portal-card staff-portal-card">
       <div class="student-portal-head">
         <div class="student-portal-id">
-          <img src="${s.img || 'https://i.pravatar.cc/100?img=1'}" alt="${s.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">
+          <img src="${s.img || 'sagar.jpeg'}" alt="${s.name}" onerror="this.src='sagar.jpeg'">
           <div>
             <h3>${s.name}</h3>
             <p class="muted-small"><i class="ri-team-fill" style="color:#34d399"></i> ${s.dept}</p>
@@ -755,11 +777,19 @@ function renderStaffPortal(container) {
   });
 }
 
+// Attendance entries store { status, dept } so every record stays
+// tied to the department it was marked under, not just looked up
+// later from the staff list (which could change over time).
+function readAttendanceEntry(raw) {
+  if (raw && typeof raw === 'object') return raw;
+  return { status: raw, dept: undefined };
+}
+
 function staffMarkAttendance(status) {
   if (!_staffLoggedIn) return;
   const key    = `${todayStr()}|${_staffLoggedIn.id}`;
   const attObj = LS.get(KEY.staffAttendance, {});
-  attObj[key]  = status;
+  attObj[key]  = { status, dept: _staffLoggedIn.loginDept || _staffLoggedIn.dept };
   LS.set(KEY.staffAttendance, attObj);
   toast(`Marked ${status === 'present' ? 'Present ✓' : 'Absent ✗'} for today!`, status === 'present' ? 'success' : 'warn');
   renderStaffPortalSection();
@@ -778,7 +808,7 @@ function renderStaffCalendar() {
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const key = `${dateStr}|${_staffLoggedIn.id}`;
-    const status = attObj[key];
+    const status = readAttendanceEntry(attObj[key]).status;
     const isToday = dateStr === today;
     const cls = status === 'present' ? 'cal-present' : status === 'absent' ? 'cal-absent' : isToday ? 'cal-today' : '';
     html += `<div class="cal-day ${cls}" title="${dateStr}">${d}</div>`;
@@ -787,9 +817,10 @@ function renderStaffCalendar() {
 }
 
 /* ──────────────────────────────────────────
-   15. ADMIN — PIN / MODAL
+   15. ADMIN — PASSWORD / MODAL
 ────────────────────────────────────────── */
-const ADMIN_PIN = '91206'; // default pin
+const ADMIN_PASSWORD = 'Sagar@45'; // the only valid admin password
+const WEAK_PASSWORDS  = ['12345', '123456', '12345678', '00000000', 'password', 'admin', 'admin123'];
 
 function openAdminModal() {
   const modal = el('loginModal');
@@ -801,14 +832,20 @@ function initAdminModal() {
   el('modalBackBtn')?.addEventListener('click', () => el('loginModal')?.classList.remove('active'));
   el('unlockAdminBtn')?.addEventListener('click', () => {
     const pin = (el('pinInput')?.value || '').trim();
-    const storedPin = LS.get(KEY.adminPin, ADMIN_PIN);
-    if (pin === storedPin) {
+
+    if (WEAK_PASSWORDS.includes(pin.toLowerCase())) {
+      toast('That password is too weak and is blocked. Contact the institute admin.', 'error');
+      el('pinInput')?.select();
+      return;
+    }
+
+    if (pin === ADMIN_PASSWORD) {
       el('loginModal')?.classList.remove('active');
       el('pinInput').value = '';
       navigateTo('admin');
       toast('Admin Panel Unlocked! 🔓', 'success');
     } else {
-      toast('Incorrect PIN. Try again.', 'error');
+      toast('Incorrect password. Try again.', 'error');
       el('pinInput')?.select();
     }
   });
@@ -876,7 +913,7 @@ const TAB_CONFIG = {
     getRecord: () => ({ name: el('inpName').value.trim(), class: el('inpD1').value.trim(), rollNo: el('inpD2').value.trim(), img: el('tempImg').value }),
     validate: r => r.name && r.class,
     rowCells: r => [
-      `<img src="${r.img || 'https://i.pravatar.cc/100?img=1'}" alt="${r.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">`,
+      `<img src="${r.img || 'sagar.jpeg'}" alt="${r.name}" onerror="this.src='sagar.jpeg'">`,
       r.name, `Class ${r.class}`, r.rollNo || '—', formatDate(new Date(r.addedAt).toISOString().slice(0, 10))
     ],
   },
@@ -889,15 +926,16 @@ const TAB_CONFIG = {
     formTitle: 'Add / Edit Staff',
     formSetup: () => {
       el('inpName').placeholder = 'Staff Full Name';
-      el('inpD1').placeholder   = 'Department';
-      el('inpD2').placeholder   = '(Not used for staff)';
+      el('inpD1').style.display = 'none';
       el('inpD2').style.display = 'none';
+      el('inpDept').style.display = '';
+      populateDeptSelect(el('inpDept'));
       el('adminMediaRow').style.display = '';
     },
-    getRecord: () => ({ name: el('inpName').value.trim(), dept: el('inpD1').value.trim(), img: el('tempImg').value }),
+    getRecord: () => ({ name: el('inpName').value.trim(), dept: el('inpDept').value, img: el('tempImg').value }),
     validate: r => r.name && r.dept,
     rowCells: r => [
-      `<img src="${r.img || 'https://i.pravatar.cc/100?img=1'}" alt="${r.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">`,
+      `<img src="${r.img || 'sagar.jpeg'}" alt="${r.name}" onerror="this.src='sagar.jpeg'">`,
       r.name, r.dept, formatDate(new Date(r.addedAt).toISOString().slice(0, 10))
     ],
   },
@@ -932,12 +970,15 @@ const TAB_CONFIG = {
       el('inpD1').placeholder   = 'Date (YYYY-MM-DD)';
       el('inpD2').placeholder   = 'Status: present / absent';
       el('inpD2').style.display = '';
+      el('inpDept').style.display = '';
+      populateDeptSelect(el('inpDept'));
       el('adminMediaRow').style.display = 'none';
     },
     getRecord: () => ({
       name:   el('inpName').value.trim(),
       date:   el('inpD1').value.trim() || todayStr(),
       status: el('inpD2').value.trim().toLowerCase(),
+      dept:   el('inpDept').value,
     }),
     validate: r => r.name && r.status,
   },
@@ -957,7 +998,7 @@ const TAB_CONFIG = {
     getRecord: () => ({ name: el('inpName').value.trim(), class: el('inpD1').value.trim(), score: el('inpD2').value.trim(), img: el('tempImg').value }),
     validate: r => r.name && r.class && r.score,
     rowCells: r => [
-      `<img src="${r.img || 'https://i.pravatar.cc/100?img=1'}" alt="${r.name}" onerror="this.src='https://i.pravatar.cc/100?img=1'">`,
+      `<img src="${r.img || 'sagar.jpeg'}" alt="${r.name}" onerror="this.src='sagar.jpeg'">`,
       r.name, `Class ${r.class}`, r.score, formatDate(new Date(r.addedAt).toISOString().slice(0, 10))
     ],
   },
@@ -989,12 +1030,11 @@ const TAB_CONFIG = {
     formTitle: 'Add / Edit Notice',
     formSetup: () => {
       el('inpName').placeholder = 'Notice Text (full)';
-      el('inpD1').placeholder   = 'Priority (optional)';
-      el('inpD2').placeholder   = 'Expiry Date (optional)';
-      el('inpD2').style.display = '';
+      el('inpD1').style.display = 'none';
+      el('inpD2').style.display = 'none';
       el('adminMediaRow').style.display = 'none';
     },
-    getRecord: () => ({ text: el('inpName').value.trim(), priority: el('inpD1').value.trim(), expiry: el('inpD2').value.trim() }),
+    getRecord: () => ({ text: el('inpName').value.trim() }),
     validate: r => r.text,
     rowCells: r => [
       (r.text || '').slice(0, 60) + ((r.text || '').length > 60 ? '…' : ''),
@@ -1040,13 +1080,19 @@ function setupAdminForm() {
   if (!cfg) return;
   const titleEl = el('formTitle');
   if (titleEl) titleEl.innerHTML = `<i class="${cfg.icon}" style="color:#6366f1"></i> ${cfg.formTitle}`;
+  // Reset shared fields to a known default before each tab's own
+  // formSetup decides which ones it actually needs.
+  el('inpD1').style.display   = '';
+  el('inpD2').style.display   = '';
+  el('inpDept').style.display = 'none';
   cfg.formSetup?.();
-  // Reset fields
-  el('inpName').value = '';
-  el('inpD1').value   = '';
-  el('inpD2').value   = '';
-  el('tempImg').value = '';
-  el('editId').value  = '';
+  // Reset field values
+  el('inpName').value  = '';
+  el('inpD1').value    = '';
+  el('inpD2').value    = '';
+  el('inpDept').value  = '';
+  el('tempImg').value  = '';
+  el('editId').value   = '';
   const preview = el('imgPreview');
   if (preview) { preview.src = ''; preview.style.display = 'none'; }
 }
@@ -1109,17 +1155,19 @@ function saveAttendanceRecord() {
   const name    = el('inpName').value.trim();
   const date    = el('inpD1').value.trim() || todayStr();
   const status  = el('inpD2').value.trim().toLowerCase();
+  const dept    = isStaff ? el('inpDept').value : '';
 
   if (!name || !status || !['present', 'absent'].includes(status)) {
     toast('Enter name, date & status (present/absent).', 'warn'); return;
   }
+  if (isStaff && !dept) { toast('Please select the department for this record.', 'warn'); return; }
 
   const sourceList = LS.get(isStaff ? KEY.staff : KEY.students, []);
   const person     = sourceList.find(p => p.name.toLowerCase() === name.toLowerCase());
   if (!person) { toast(`${isStaff ? 'Staff' : 'Student'} not found!`, 'error'); return; }
 
   const attObj  = LS.get(isStaff ? KEY.staffAttendance : KEY.attendance, {});
-  attObj[`${date}|${person.id}`] = status;
+  attObj[`${date}|${person.id}`] = isStaff ? { status, dept } : status;
   LS.set(isStaff ? KEY.staffAttendance : KEY.attendance, attObj);
 
   setupAdminForm();
@@ -1249,15 +1297,19 @@ function buildAttendanceRows(isStaff) {
   const peopleMap = {};
   people.forEach(p => { peopleMap[p.id] = p; });
 
-  return Object.entries(attObj).map(([k, status]) => {
+  return Object.entries(attObj).map(([k, raw]) => {
     const [date, pid] = k.split('|');
     const person      = peopleMap[pid] || {};
+    const entry        = readAttendanceEntry(raw);
+    // Prefer the department the record was actually marked under;
+    // fall back to the staff member's current registered department.
+    const dept          = entry.dept || person.dept;
     return {
       id:         k,
       date:       date,
       personName: person.name || pid,
-      extra:      isStaff ? (person.dept || '—') : (`Class ${person.class || '—'}`),
-      status:     status,
+      extra:      isStaff ? (dept || '—') : (`Class ${person.class || '—'}`),
+      status:     entry.status,
       addedAt:    new Date(date).getTime(),
     };
   }).sort((a, b) => b.addedAt - a.addedAt);
@@ -1276,8 +1328,9 @@ function editRecord(id) {
   if (!rec) return;
 
   el('inpName').value  = rec.name || rec.text || '';
-  el('inpD1').value    = rec.class || rec.dept || rec.category || rec.priority || '';
-  el('inpD2').value    = rec.rollNo || rec.role || rec.score || rec.desc || rec.expiry || '';
+  el('inpD1').value    = rec.class || rec.category || '';
+  el('inpD2').value    = rec.rollNo || rec.role || rec.score || rec.desc || '';
+  el('inpDept').value  = rec.dept || '';
   el('tempImg').value  = rec.img || '';
   el('editId').value   = id;
 
@@ -1656,8 +1709,9 @@ window.toggleHistoryPreview = function (btn, id) {
     return `
       <div class="history-preview-section">
         <div class="history-preview-heading"><i class="ri-table-fill" style="color:${color}"></i> ${title}</div>
-        <div class="table-responsive-wrapper" style="border-radius:8px;overflow:hidden">
-          <table style="min-width:400px;font-size:0.8rem">
+        <p class="table-scroll-hint history-preview-scroll-hint"><i class="ri-arrow-left-right-line"></i> Scroll horizontally to see all columns</p>
+        <div class="table-responsive-wrapper history-preview-wrapper">
+          <table class="history-preview-inner-table">
             <thead><tr><th>Name</th><th>Dept/Class</th><th>Present</th><th>Absent</th><th>Total</th><th>%</th></tr></thead>
             <tbody>${data.map(r => `
               <tr>
@@ -1753,12 +1807,38 @@ function checkAutoArchive() {
 function initContactForm() {
   const form = el('contactForm');
   if (!form) return;
+  const submitBtn = form.querySelector('.contact-form-submit');
+  const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+
   form.addEventListener('submit', function (e) {
-    // Let Formspree handle it; show success msg after a delay
-    setTimeout(() => {
-      const msg = el('formSuccessMsg');
-      if (msg) { msg.style.display = 'flex'; setTimeout(() => { msg.style.display = 'none'; }, 6000); }
-    }, 1200);
+    e.preventDefault(); // Don't navigate away — send in the background instead.
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="ri-loader-4-line"></i> Sending...';
+    }
+
+    fetch(form.action, {
+      method: 'POST',
+      body: new FormData(form),
+      headers: { Accept: 'application/json' },
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Request failed');
+        const msg = el('formSuccessMsg');
+        if (msg) msg.style.display = 'flex';
+        form.reset();
+        toast('Message sent successfully! ✅', 'success');
+        // Give the person a moment to see the confirmation, then refresh.
+        setTimeout(() => { location.reload(); }, 2500);
+      })
+      .catch(() => {
+        toast('Could not send your message. Please try again or call us.', 'error');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalBtnHtml;
+        }
+      });
   });
 }
 
