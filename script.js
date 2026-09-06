@@ -1,6 +1,6 @@
 /* ================================================================
    SAGAR CLASSES — MASTER SCRIPT v3.0
-   Storage  : localStorage only (no SQL, no DOM storage)
+   Storage  : Express API + MongoDB (no localStorage/sessionStorage)
    Icons    : Remix Icons (ri-*) — all updated
    Features : Admin CRUD, Attendance, Toppers, Staff, Notices,
               Archive / History, Export (Excel/PDF/CSV), Themes
@@ -9,22 +9,53 @@
 'use strict';
 
 /* ──────────────────────────────────────────
-   1. STORAGE HELPERS
+   1. BACKEND + MONGODB DATA STORE
+   Browser storage has been completely removed.
+   The frontend keeps a temporary in-memory cache backed by MongoDB and
+   persists every change through the Express API.
 ────────────────────────────────────────── */
-const LS = {
+const API_BASE = '/api';
+const _dbCache = Object.create(null);
+
+const DB = {
   get(key, fallback = null) {
-    try {
-      const v = localStorage.getItem(key);
-      return v !== null ? JSON.parse(v) : fallback;
-    } catch { return fallback; }
+    return Object.prototype.hasOwnProperty.call(_dbCache, key) ? _dbCache[key] : fallback;
   },
   set(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+    _dbCache[key] = val;
+    return apiRequest(`/store/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value: val }),
+    }).catch(err => {
+      console.error(`Failed to save ${key}:`, err);
+      toast?.('Database save failed. Check backend connection.', 'error');
+    });
   },
   remove(key) {
-    try { localStorage.removeItem(key); } catch {}
+    delete _dbCache[key];
+    return apiRequest(`/store/${encodeURIComponent(key)}`, { method: 'DELETE' })
+      .catch(err => console.error(`Failed to delete ${key}:`, err));
   }
 };
+
+async function apiRequest(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options,
+  });
+  if (!res.ok) {
+    let message = `API request failed (${res.status})`;
+    try { message = (await res.json()).message || message; } catch {}
+    throw new Error(message);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function hydrateDataFromBackend() {
+  const data = await apiRequest('/store');
+  Object.assign(_dbCache, data || {});
+}
 
 /* ──────────────────────────────────────────
    2. DATA KEYS
@@ -36,6 +67,7 @@ const KEY = {
   staffAttendance: 'sc_staff_attendance', // { "YYYY-MM-DD|staffId":   "present"|"absent" }
   toppers:         'sc_toppers',
   functions:       'sc_functions',
+  classes:         'sc_classes',
   notices:         'sc_notices',
   history:         'sc_history',          // archived month snapshots
   theme:           'sc_theme',
@@ -67,9 +99,9 @@ function populateDeptSelect(selectEl, selected) {
 /* ──────────────────────────────────────────
    3. SEED DEFAULT DATA (first run only)
 ────────────────────────────────────────── */
-function seedData() {
-  if (!LS.get(KEY.students)) {
-    LS.set(KEY.students, [
+async function seedData() {
+  if (!DB.get(KEY.students)) {
+    await DB.set(KEY.students, [
       { id: 'S001', name: 'Aarav Sharma',    class: '10', rollNo: '01', img: 'https://i.pravatar.cc/100?img=11', addedAt: Date.now() },
       { id: 'S002', name: 'Priya Mehta',     class: '10', rollNo: '02', img: 'https://i.pravatar.cc/100?img=47', addedAt: Date.now() },
       { id: 'S003', name: 'Rohan Patil',     class: '9',  rollNo: '01', img: 'https://i.pravatar.cc/100?img=15', addedAt: Date.now() },
@@ -78,8 +110,8 @@ function seedData() {
       { id: 'S006', name: 'Ishaan Verma',    class: '11', rollNo: '01', img: 'https://i.pravatar.cc/100?img=33', addedAt: Date.now() },
     ]);
   }
-  if (!LS.get(KEY.staff)) {
-    LS.set(KEY.staff, [
+  if (!DB.get(KEY.staff)) {
+    await DB.set(KEY.staff, [
       { id: 'T001', name: 'Sagar Sir',       dept: 'Mathematics',  img: 'https://i.pravatar.cc/100?img=57', addedAt: Date.now() },
       { id: 'T002', name: 'Pooja Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
       { id: 'T003', name: 'Pratibha Ma\'am',    dept: 'Science',      img: 'https://i.pravatar.cc/100?img=44', addedAt: Date.now() },
@@ -93,32 +125,71 @@ function seedData() {
       { id: 'T0010', name: 'Anita Ma\'am',    dept: 'Social Science',img: 'https://i.pravatar.cc/100?img=49', addedAt: Date.now() },
     ]);
   }
-  if (!LS.get(KEY.toppers)) {
-    LS.set(KEY.toppers, [
+  if (!DB.get(KEY.toppers)) {
+    await DB.set(KEY.toppers, [
       { id: 'TP001', name: 'Sneha Joshi',  class: '12', score: '97%', img: 'https://i.pravatar.cc/100?img=48', addedAt: Date.now() },
       { id: 'TP002', name: 'Aarav Sharma', class: '10', score: '95%', img: 'https://i.pravatar.cc/100?img=11', addedAt: Date.now() },
       { id: 'TP003', name: 'Priya Mehta',  class: '10', score: '93%', img: 'https://i.pravatar.cc/100?img=47', addedAt: Date.now() },
       { id: 'TP004', name: 'Ishaan Verma', class: '11', score: '91%', img: 'https://i.pravatar.cc/100?img=33', addedAt: Date.now() },
     ]);
   }
-  if (!LS.get(KEY.functions)) {
-    LS.set(KEY.functions, [
-      { id: 'EV001', name: 'Annual Picnic 2025', category: 'Picnic',      desc: 'Annual student picnic with games and fun activities.', img: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=600&q=80', addedAt: Date.now() },
-      { id: 'EV002', name: 'Diwali Celebration', category: 'Festival',    desc: 'Colourful Diwali celebrations with rangoli and sweets.', img: 'https://images.unsplash.com/photo-1574004351234-de9fcd55f8a3?auto=format&fit=crop&w=600&q=80', addedAt: Date.now() },
-      { id: 'EV003', name: 'Science Exhibition',  category: 'Academic',   desc: 'Students showcase innovative science projects.', img: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80', addedAt: Date.now() },
+  const defaultBatches = [
+    { id:'B01', name:'Class 1st – 5th', group:'Foundation Batch', desc:'Strong foundations in English, Mathematics, EVS and creative learning through age-appropriate activities.', img:'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?auto=format&fit=crop&w=900&q=85', classes:['1','2','3','4','5'] },
+    { id:'B02', name:'Class 6th – 8th', group:'Middle School Batch', desc:'Concept-focused learning in Mathematics, Science, English and Social Science with regular practice.', img:'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=900&q=85', classes:['6','7','8'] },
+    { id:'B03', name:'Class 9th – 10th', group:'Board Preparation Batch', desc:'Focused SSC board preparation with concept clarity, weekly tests, revision and personal mentoring.', img:'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=900&q=85', classes:['9','10'] },
+    { id:'B04', name:'Class 11th – 12th Science', group:'HSC Science Batch', desc:'Stream-specific Science coaching with strong preparation in Physics, Chemistry, Mathematics and Biology.', img:'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=900&q=85', classes:['11','12'], stream:'Science' },
+    { id:'B05', name:'Class 11th – 12th Commerce', group:'HSC Commerce Batch', desc:'Complete Commerce preparation covering Accountancy, Economics, Business Studies and Mathematics.', img:'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=900&q=85', classes:['11','12'], stream:'Commerce' }
+  ];
+  const savedClasses = DB.get(KEY.classes);
+  const batchVersion = DB.get('sc_classes_version');
+  if (!savedClasses || batchVersion !== 'batch-groups-v1') {
+    await DB.set(KEY.classes, defaultBatches);
+    await DB.set('sc_classes_version', 'batch-groups-v1');
+  }
+  if (!DB.get(KEY.functions)) {
+    await DB.set(KEY.functions, [
+      { id:'EV001', name:'Annual Picnic', category:'Picnic', desc:'A fun-filled educational picnic with games, teamwork and memorable activities.', img:'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=900&q=85' },
+      { id:'EV002', name:'Diwali Celebration', category:'Festival', desc:'A vibrant celebration with rangoli, cultural activities and festive learning.', img:'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=85' },
+      { id:'EV003', name:'Science Exhibition', category:'Academic', desc:'Students present creative experiments, working models and science projects.', img:'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=900&q=85' },
+      { id:'EV004', name:'Sports Day', category:'Sports', desc:'Track, field and team activities that encourage fitness, discipline and sportsmanship.', img:'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=900&q=85' },
+      { id:'EV005', name:'Annual Day', category:'Cultural', desc:'A celebration of student talent through performances, awards and cultural programmes.', img:'https://images.unsplash.com/photo-1503095396549-807759245b35?auto=format&fit=crop&w=900&q=85' },
+      { id:'EV006', name:'Parent-Teacher Meeting', category:'PTM', desc:'A constructive interaction between parents and teachers to review student progress.', img:'https://images.unsplash.com/photo-1529390079861-591de354faf5?auto=format&fit=crop&w=900&q=85' },
+      { id:'EV007', name:'Independence Day', category:'National Day', desc:'Patriotic activities, student performances and a special assembly celebrating India.', img:'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=900&q=85' },
+      { id:'EV008', name:'Republic Day', category:'National Day', desc:'A meaningful school celebration with speeches, performances and civic learning.', img:'https://images.unsplash.com/photo-1532375810709-75b1da00537c?auto=format&fit=crop&w=900&q=85' },
     ]);
   }
-  if (!LS.get(KEY.notices)) {
-    LS.set(KEY.notices, [
+  // Normalize legacy event records so old records also use category-appropriate images.
+  const eventImages = {
+    Picnic:'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=900&q=85',
+    Festival:'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=85',
+    Academic:'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=900&q=85',
+    Sports:'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=900&q=85',
+    Cultural:'https://images.unsplash.com/photo-1503095396549-807759245b35?auto=format&fit=crop&w=900&q=85',
+    PTM:'https://images.unsplash.com/photo-1529390079861-591de354faf5?auto=format&fit=crop&w=900&q=85',
+    'National Day':'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=900&q=85'
+  };
+  const currentEvents = DB.get(KEY.functions, []);
+  if (currentEvents.length) {
+    const normalizedEvents = currentEvents.map(event => ({
+      ...event,
+      img: eventImages[event.category] || event.img || 'https://placehold.co/900x520?text=Event'
+    }));
+    if (JSON.stringify(normalizedEvents) !== JSON.stringify(currentEvents)) {
+      await DB.set(KEY.functions, normalizedEvents);
+    }
+  }
+
+  if (!DB.get(KEY.notices)) {
+    await DB.set(KEY.notices, [
       { id: 'N001', text: '🎓 Admissions open for 2026-27 academic year! Enroll now.', addedAt: Date.now() },
       { id: 'N002', text: '📝 Unit Test scheduled for Class 10 on 1st September 2026.', addedAt: Date.now() },
       { id: 'N003', text: '🏆 Congratulations to all Board toppers of 2025-26 batch!', addedAt: Date.now() },
       { id: 'N004', text: '📅 Parent-Teacher Meeting on 10th September 2026 at 10:00 AM.', addedAt: Date.now() },
     ]);
   }
-  if (!LS.get(KEY.history)) LS.set(KEY.history, []);
-  if (!LS.get(KEY.attendance)) LS.set(KEY.attendance, {});
-  if (!LS.get(KEY.staffAttendance)) LS.set(KEY.staffAttendance, {});
+  if (!DB.get(KEY.history)) await DB.set(KEY.history, []);
+  if (!DB.get(KEY.attendance)) await DB.set(KEY.attendance, {});
+  if (!DB.get(KEY.staffAttendance)) await DB.set(KEY.staffAttendance, {});
 }
 
 /* ──────────────────────────────────────────
@@ -173,7 +244,7 @@ function toast(msg, type = 'success') {
    6. THEME TOGGLE
 ────────────────────────────────────────── */
 function initTheme() {
-  const saved = LS.get(KEY.theme, 'dark');
+  const saved = DB.get(KEY.theme, 'dark');
   applyTheme(saved);
 
   el('themeToggleBtn')?.addEventListener('click', () => toggleTheme());
@@ -187,7 +258,7 @@ function toggleTheme() {
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  LS.set(KEY.theme, theme);
+  DB.set(KEY.theme, theme);
   const isDark = theme === 'dark';
   // Sidebar toggle
   const icon = el('themeIcon');
@@ -246,7 +317,13 @@ function navigateTo(section) {
   const target = el(section);
   if (target) {
     target.classList.add('active');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Keep the active section comfortably below the fixed/floating header.
+    // This is especially useful when opening Toppers from the About page.
+    requestAnimationFrame(() => {
+      const headerOffset = window.innerWidth <= 768 ? 88 : 104;
+      const targetTop = target.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top: Math.max(0, targetTop - headerOffset), behavior: 'smooth' });
+    });
   }
   document.querySelectorAll('.nav-link[data-section]').forEach(l => {
     l.classList.toggle('active', l.dataset.section === section);
@@ -266,7 +343,7 @@ function navigateTo(section) {
 function renderNoticeTicker() {
   const ticker = el('liveNoticeTicker');
   if (!ticker) return;
-  const notices = LS.get(KEY.notices, []);
+  const notices = DB.get(KEY.notices, []);
   ticker.textContent = notices.length
     ? notices.map(n => n.text).join('   ·   ')
     : 'No notices at the moment. Check back soon!';
@@ -284,7 +361,7 @@ function renderHome() {
 function renderHomeAchievers() {
   const strip = el('homeAchieversStrip');
   if (!strip) return;
-  const toppers = LS.get(KEY.toppers, []).slice(0, 5);
+  const toppers = DB.get(KEY.toppers, []).slice(0, 5);
   if (!toppers.length) { strip.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;padding:0.5rem">No toppers added yet.</p>'; return; }
   strip.innerHTML = toppers.map((t, i) => `
     <div class="achiever-chip animate-hover-up">
@@ -303,50 +380,68 @@ function renderHomeAchievers() {
 function renderBatches() {
   const container = el('largeClassesContainer');
   if (!container) return;
-  const batches = [
-    { name: 'Class 10 — SSC Board Batch', desc: 'Comprehensive SSC board preparation with weekly tests and doubt sessions.', img: 'https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?auto=format&fit=crop&w=600&q=80', students: LS.get(KEY.students, []).filter(s => s.class === '10').length },
-    { name: 'Class 12 — HSC Science Batch', desc: 'Focused HSC Science coaching covering Physics, Chemistry, Maths & Biology.', img: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80', students: LS.get(KEY.students, []).filter(s => s.class === '12').length },
-    { name: 'Foundation Batch (1st–8th)', desc: 'Strong foundational skill-building for primary and middle school students.', img: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=600&q=80', students: LS.get(KEY.students, []).filter(s => Number(s.class) <= 8).length },
-  ];
-  container.innerHTML = batches.map(b => `
-    <div class="class-card-large animate-hover-up">
-      <div class="class-card-img-wrap"><img src="${b.img}" alt="${b.name}" onerror="this.src='https://placehold.co/600x300'"></div>
-      <div class="class-card-body">
-        <div>
-          <span class="class-badge">Active Batch</span>
-          <h3 class="batch-name">${b.name}</h3>
-          <p class="batch-desc">${b.desc}</p>
+  const classes = DB.get(KEY.classes, []);
+  const students = DB.get(KEY.students, []);
+  if (!classes.length) {
+    container.innerHTML = '<div class="empty-state"><i class="ri-book-open-fill"></i><p>No classes added yet.</p></div>';
+    return;
+  }
+  container.innerHTML = classes.map(cls => {
+    const count = students.filter(s => (cls.classes || []).includes(String(s.class))).length;
+    const classList = (cls.classes || []).map(c => `Class ${c}`).join(' · ');
+    return `
+      <article class="class-card-large animate-hover-up">
+        <div class="class-card-img-wrap">
+          <img src="${cls.img}" alt="Students learning in ${cls.name}" loading="lazy" onerror="this.src='https://placehold.co/900x520?text=${encodeURIComponent(cls.name)}'">
         </div>
-        <div class="class-stats">
-          <span><i class="ri-user-fill" style="color:#818cf8"></i> ${b.students} Students</span>
-          <button class="p-btn class-join-btn" data-goto="contact" style="padding:6px 14px;font-size:0.75rem;">Join Batch</button>
+        <div class="class-card-body">
+          <div>
+            <span class="class-badge">${cls.group || 'Active Batch'}</span>
+            <h3 class="batch-name">${cls.name}</h3>
+            <p class="batch-classes"><i class="ri-graduation-cap-line"></i> ${classList}</p>
+            <p class="batch-desc">${cls.desc}</p>
+          </div>
+          <div class="class-stats">
+            <span><i class="ri-user-fill"></i> ${count} Students</span>
+            <button class="p-btn class-join-btn" data-goto="contact">Enquire Now <i class="ri-arrow-right-line"></i></button>
+          </div>
         </div>
-      </div>
-    </div>`).join('');
+      </article>`;
+  }).join('');
 }
 
 /* ──────────────────────────────────────────
    10. FUNCTIONS & EVENTS RENDER
 ────────────────────────────────────────── */
+const EVENT_CATEGORY_IMAGES = {
+  Picnic:'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=900&q=85',
+  Festival:'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=85',
+  Academic:'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=900&q=85',
+  Sports:'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=900&q=85',
+  Cultural:'https://images.unsplash.com/photo-1503095396549-807759245b35?auto=format&fit=crop&w=900&q=85',
+  PTM:'https://images.unsplash.com/photo-1529390079861-591de354faf5?auto=format&fit=crop&w=900&q=85',
+  'National Day':'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=900&q=85'
+};
+
 function renderFunctions() {
   const container = el('functionsDisplayContainer');
   if (!container) return;
-  const events = LS.get(KEY.functions, []);
+  const events = DB.get(KEY.functions, []);
   if (!events.length) {
-    container.innerHTML = `<div class="empty-state"><i class="ri-calendar-event-fill" style="color:#f97316;font-size:2.5rem;display:block;margin-bottom:0.5rem"></i><p>No events added yet.</p></div>`;
+    container.innerHTML = `<div class="empty-state"><i class="ri-calendar-schedule-fill" style="color:#f97316;font-size:2.5rem;display:block;margin-bottom:0.5rem"></i><p>No events added yet.</p></div>`;
     return;
   }
   container.innerHTML = events.map(ev => `
     <div class="event-tile-card animate-hover-up">
       <div class="event-img-container">
-        <img src="${ev.img || 'https://placehold.co/600x300'}" alt="${ev.name}" onerror="this.src='https://placehold.co/600x300'">
+        <img src="${ev.img || EVENT_CATEGORY_IMAGES[ev.category] || 'https://placehold.co/900x520?text=Event'}" alt="${ev.name}" loading="lazy" onerror="this.src='https://placehold.co/900x520?text=Event'">
         <span class="event-floating-badge">${ev.category || 'Event'}</span>
       </div>
       <div class="event-content-body">
         <h3 class="event-title">${ev.name}</h3>
         <p class="event-desc">${ev.desc || ''}</p>
         <div class="event-footer-row">
-          <span class="event-campus-tag"><i class="ri-calendar-event-fill" style="color:#f97316"></i> Sagar Classes Campus</span>
+          <span class="event-campus-tag"><i class="ri-calendar-schedule-fill" style="color:#f97316"></i> Sagar Classes Campus</span>
           <button class="p-btn event-more-btn" data-goto="contact" style="padding:4px 12px;font-size:0.75rem;">Know More</button>
         </div>
       </div>
@@ -360,38 +455,60 @@ function renderToppers() {
   const display = el('topperDisplay');
   const spotlight = el('topperOfMonth');
   if (!display) return;
-  const toppers = LS.get(KEY.toppers, []);
+
+  const toppers = DB.get(KEY.toppers, []);
+
   if (!toppers.length) {
-    display.innerHTML = `<div class="empty-state"><i class="ri-trophy-fill" style="color:#fbbf24;font-size:2.5rem;display:block;margin-bottom:0.5rem"></i><p>No toppers added yet.</p></div>`;
+    display.innerHTML = `<div class="empty-state"><i class="ri-award-fill" style="color:#fbbf24;font-size:2.5rem;display:block;margin-bottom:0.5rem"></i><p>No toppers added yet.</p></div>`;
     if (spotlight) spotlight.innerHTML = '';
     return;
   }
-  // Spotlight
+
+  // First topper is highlighted, while every topper keeps the complete
+  // score/marks value supplied by the admin without truncation.
   if (spotlight && toppers[0]) {
     const t = toppers[0];
     spotlight.innerHTML = `
       <div class="topper-spotlight">
         <div class="topper-spotlight-glow"></div>
+        <div class="topper-spotlight-medal" aria-label="Topper">
+          <i class="ri-medal-2-fill"></i><span>1st</span>
+        </div>
         <img class="topper-spotlight-photo" src="${t.img || 'sagar.jpeg'}" alt="${t.name}" onerror="this.src='sagar.jpeg'">
         <div class="topper-spotlight-body">
-          <span class="topper-spotlight-tag"><i class="ri-vip-crown-2-fill" style="color:#fbbf24"></i> Topper of the Term</span>
+          <span class="topper-spotlight-tag"><i class="ri-vip-crown-2-fill"></i> Topper of the Term</span>
           <h2>${t.name}</h2>
           <p class="topper-spotlight-standard">Class ${t.class}</p>
-          <p class="topper-spotlight-score"><span>${t.score}</span> Score</p>
+          <div class="topper-spotlight-score-box">
+            <span class="score-label">Marks / Score</span>
+            <strong>${t.score}</strong>
+          </div>
         </div>
       </div>`;
   }
-  const rankBadges = ['🥇', '🥈', '🥉'];
-  display.innerHTML = toppers.map((t, i) => `
-    <div class="facility-card topper-card animate-hover-up">
-      <span class="topper-rank-badge">${rankBadges[i] || `#${i + 1}`}</span>
-      <img class="topper-photo" src="${t.img || 'sagar.jpeg'}" alt="${t.name}" onerror="this.src='sagar.jpeg'">
-      <span class="notice-tag topper-standard-tag">Class ${t.class}</span>
-      <h3>${t.name}</h3>
-      <p class="topper-score">${t.score}</p>
-    </div>`).join('');
-}
 
+  const medalClasses = ['gold', 'silver', 'bronze'];
+  const medalIcons = ['ri-medal-2-fill', 'ri-medal-2-fill', 'ri-medal-2-fill'];
+
+  display.innerHTML = toppers.map((t, i) => {
+    const rank = i + 1;
+    const medal = medalClasses[i] || 'other';
+    return `
+      <article class="facility-card topper-card animate-hover-up" aria-label="${rank} rank topper">
+        <div class="topper-medal topper-medal-${medal}">
+          <i class="${medalIcons[i] || 'ri-award-fill'}"></i>
+          <span>${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'}</span>
+        </div>
+        <img class="topper-photo" src="${t.img || 'sagar.jpeg'}" alt="${t.name}" onerror="this.src='sagar.jpeg'">
+        <span class="notice-tag topper-standard-tag">Class ${t.class}</span>
+        <h3 title="${t.name}">${t.name}</h3>
+        <div class="topper-score-box">
+          <span>Marks / Score</span>
+          <strong>${t.score}</strong>
+        </div>
+      </article>`;
+  }).join('');
+}
 /* ──────────────────────────────────────────
    12. STUDENT ATTENDANCE SECTION (Login-gated, mirrors Staff Portal)
 ────────────────────────────────────────── */
@@ -415,7 +532,7 @@ function renderStudentLogin(container) {
   container.innerHTML = `
     <div class="student-login-card">
       <div class="student-login-head">
-        <i class="ri-user-lock-fill" style="color:#6366f1;font-size:2.5rem;display:block"></i>
+        <div class="attendance-login-single-icon student" aria-hidden="true"><i class="ri-login-circle-line"></i></div>
         <h3>Student Attendance Portal</h3>
         <p>Login securely with your Name and Standard.</p>
       </div>
@@ -442,7 +559,7 @@ function renderStudentLogin(container) {
     const cls  = el('loginStudentClass')?.value || '';
     if (!name || !cls) { toast('Please enter your name and select your class.', 'warn'); return; }
 
-    const students = LS.get(KEY.students, []);
+    const students = DB.get(KEY.students, []);
     const found    = students.find(s => s.name.toLowerCase() === name.toLowerCase() && s.class === cls);
     if (!found) { toast('Student not found. Please check your name and class or contact admin.', 'error'); return; }
 
@@ -456,7 +573,7 @@ function renderStudentLogin(container) {
 function renderStudentPortal(container) {
   const s        = _studentLoggedIn;
   const today    = todayStr();
-  const attObj   = LS.get(KEY.attendance, {});
+  const attObj   = DB.get(KEY.attendance, {});
   const todayKey = `${today}|${s.id}`;
   const todayStatus = attObj[todayKey];
 
@@ -539,9 +656,9 @@ function renderStudentPortal(container) {
 function studentMarkAttendance(status) {
   if (!_studentLoggedIn) return;
   const key    = `${todayStr()}|${_studentLoggedIn.id}`;
-  const attObj = LS.get(KEY.attendance, {});
+  const attObj = DB.get(KEY.attendance, {});
   attObj[key]  = status;
-  LS.set(KEY.attendance, attObj);
+  DB.set(KEY.attendance, attObj);
   toast(`Marked ${status === 'present' ? 'Present ✓' : 'Absent ✗'} for today!`, status === 'present' ? 'success' : 'warn');
   renderStudentAttendanceSection();
 }
@@ -549,7 +666,7 @@ function studentMarkAttendance(status) {
 function renderStudentCalendar() {
   const grid = el('studentCalGrid');
   if (!grid || !_studentCalMonth || !_studentLoggedIn) return;
-  const attObj = LS.get(KEY.attendance, {});
+  const attObj = DB.get(KEY.attendance, {});
   const [y, m] = _studentCalMonth.split('-').map(Number);
   const firstDay = new Date(y, m - 1, 1).getDay();
   const daysInMonth = new Date(y, m, 0).getDate();
@@ -582,8 +699,8 @@ function searchStudentAttendance() {
   if (!result) return;
   if (!name && !cls) { result.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;padding:0.5rem"><i class="ri-information-fill" style="color:#38bdf8"></i> Enter name or class to search.</p>`; return; }
 
-  const students   = LS.get(KEY.students, []);
-  const attendance = LS.get(KEY.attendance, {});
+  const students   = DB.get(KEY.students, []);
+  const attendance = DB.get(KEY.attendance, {});
   const found      = students.filter(s =>
     (!name || s.name.toLowerCase().includes(name)) &&
     (!cls  || s.class === cls)
@@ -650,7 +767,7 @@ function renderStaffLogin(container) {
   container.innerHTML = `
     <div class="student-login-card staff-login-card">
       <div class="student-login-head">
-        <i class="ri-user-star-fill" style="color:#34d399;font-size:2.5rem;display:block"></i>
+        <div class="attendance-login-single-icon staff" aria-hidden="true"><i class="ri-login-circle-line"></i></div>
         <h3>Staff Attendance Login</h3>
         <p>Login with your registered name and department.</p>
       </div>
@@ -660,7 +777,7 @@ function renderStaffLogin(container) {
           <input type="text" id="loginStaffName" class="pill-input" placeholder="e.g. Sagar Sir">
         </div>
         <div>
-          <label class="form-label"><i class="ri-team-fill"></i> Department</label>
+          <label class="form-label"><i class="ri-group-fill"></i> Department</label>
           <select id="loginStaffDepartment" class="pill-input">
             <option value="">Select Department</option>
             ${STAFF_DEPTS.map(d => `<option value="${d}">${d}</option>`).join('')}
@@ -677,7 +794,7 @@ function renderStaffLogin(container) {
     const dept = el('loginStaffDepartment')?.value || '';
     if (!name || !dept) { toast('Please enter your name and select department.', 'warn'); return; }
 
-    const staff = LS.get(KEY.staff, []);
+    const staff = DB.get(KEY.staff, []);
     const found = staff.find(s => s.name.toLowerCase() === name.toLowerCase());
     if (!found) { toast('Staff member not found. Contact admin.', 'error'); return; }
 
@@ -698,7 +815,7 @@ function renderStaffLogin(container) {
 function renderStaffPortal(container) {
   const s = _staffLoggedIn;
   const today  = todayStr();
-  const attObj = LS.get(KEY.staffAttendance, {});
+  const attObj = DB.get(KEY.staffAttendance, {});
   const todayKey = `${today}|${s.id}`;
   const todayStatus = readAttendanceEntry(attObj[todayKey]).status;
 
@@ -725,7 +842,7 @@ function renderStaffPortal(container) {
           <img src="${s.img || 'sagar.jpeg'}" alt="${s.name}" onerror="this.src='sagar.jpeg'">
           <div>
             <h3>${s.name}</h3>
-            <p class="muted-small"><i class="ri-team-fill" style="color:#34d399"></i> ${s.dept}</p>
+            <p class="muted-small"><i class="ri-group-fill" style="color:#34d399"></i> ${s.dept}</p>
           </div>
         </div>
         <button class="a-btn" id="staffLogoutBtn"><i class="ri-logout-box-r-fill" style="color:#f87171"></i> Logout</button>
@@ -788,9 +905,9 @@ function readAttendanceEntry(raw) {
 function staffMarkAttendance(status) {
   if (!_staffLoggedIn) return;
   const key    = `${todayStr()}|${_staffLoggedIn.id}`;
-  const attObj = LS.get(KEY.staffAttendance, {});
+  const attObj = DB.get(KEY.staffAttendance, {});
   attObj[key]  = { status, dept: _staffLoggedIn.loginDept || _staffLoggedIn.dept };
-  LS.set(KEY.staffAttendance, attObj);
+  DB.set(KEY.staffAttendance, attObj);
   toast(`Marked ${status === 'present' ? 'Present ✓' : 'Absent ✗'} for today!`, status === 'present' ? 'success' : 'warn');
   renderStaffPortalSection();
 }
@@ -798,7 +915,7 @@ function staffMarkAttendance(status) {
 function renderStaffCalendar() {
   const grid = el('staffCalGrid');
   if (!grid || !_staffCalMonth) return;
-  const attObj = LS.get(KEY.staffAttendance, {});
+  const attObj = DB.get(KEY.staffAttendance, {});
   const [y, m] = _staffCalMonth.split('-').map(Number);
   const firstDay = new Date(y, m - 1, 1).getDay();
   const daysInMonth = new Date(y, m, 0).getDate();
@@ -859,23 +976,23 @@ function renderAdminStats() {
   const grid = el('adminStatsGrid');
   if (!grid) return;
 
-  const students   = LS.get(KEY.students, []);
-  const staff      = LS.get(KEY.staff, []);
-  const toppers    = LS.get(KEY.toppers, []);
-  const functions  = LS.get(KEY.functions, []);
-  const notices    = LS.get(KEY.notices, []);
-  const history    = LS.get(KEY.history, []);
-  const attendance = LS.get(KEY.attendance, {});
+  const students   = DB.get(KEY.students, []);
+  const staff      = DB.get(KEY.staff, []);
+  const toppers    = DB.get(KEY.toppers, []);
+  const functions  = DB.get(KEY.functions, []);
+  const notices    = DB.get(KEY.notices, []);
+  const history    = DB.get(KEY.history, []);
+  const attendance = DB.get(KEY.attendance, {});
 
   const todayAtt   = Object.entries(attendance).filter(([k, v]) => k.startsWith(todayStr()) && v === 'present').length;
 
   const stats = [
-    { label: 'Total Students', value: students.length, icon: 'ri-user-heart-fill',       color: '#818cf8' },
-    { label: 'Staff Members',  value: staff.length,     icon: 'ri-team-fill',             color: '#34d399' },
+    { label: 'Total Students', value: students.length, icon: 'ri-graduation-cap-fill',       color: '#818cf8' },
+    { label: 'Staff Members',  value: staff.length,     icon: 'ri-group-fill',             color: '#34d399' },
     { label: 'Present Today',  value: todayAtt,          icon: 'ri-user-follow-fill',     color: '#38bdf8' },
     { label: 'Toppers Listed', value: toppers.length,    icon: 'ri-vip-crown-2-fill',     color: '#fbbf24' },
-    { label: 'Events Added',   value: functions.length,  icon: 'ri-calendar-event-fill',  color: '#f97316' },
-    { label: 'Active Notices', value: notices.length,    icon: 'ri-notification-badge-fill', color: '#f87171' },
+    { label: 'Events Added',   value: functions.length,  icon: 'ri-calendar-schedule-fill',  color: '#f97316' },
+    { label: 'Active Notices', value: notices.length,    icon: 'ri-notification-3-fill', color: '#f87171' },
     { label: 'Archived Months',value: history.length,    icon: 'ri-archive-2-fill',       color: '#2dd4bf' },
   ];
 
@@ -919,7 +1036,7 @@ const TAB_CONFIG = {
   },
   staff: {
     label: 'Staff',
-    icon:  'ri-team-fill',
+    icon:  'ri-group-fill',
     key:   KEY.staff,
     cols:  ['Photo', 'Name', 'Department', 'Added'],
     fields: ['img', 'name', 'dept', 'addedAt'],
@@ -1004,7 +1121,7 @@ const TAB_CONFIG = {
   },
   functions: {
     label: 'Functions',
-    icon:  'ri-calendar-event-fill',
+    icon:  'ri-calendar-schedule-fill',
     key:   KEY.functions,
     cols:  ['Photo', 'Event Name', 'Category', 'Description', 'Added'],
     formTitle: 'Add / Edit Event',
@@ -1024,7 +1141,7 @@ const TAB_CONFIG = {
   },
   notices: {
     label: 'Notices',
-    icon:  'ri-notification-badge-fill',
+    icon:  'ri-notification-3-fill',
     key:   KEY.notices,
     cols:  ['Notice Text', 'Added'],
     formTitle: 'Add / Edit Notice',
@@ -1127,7 +1244,7 @@ function saveRecord() {
   if (!cfg.validate(rec)) { toast('Please fill all required fields.', 'warn'); return; }
 
   const editId = el('editId').value.trim();
-  const data   = LS.get(cfg.key, []);
+  const data   = DB.get(cfg.key, []);
 
   if (editId) {
     const idx = data.findIndex(r => r.id === editId);
@@ -1140,7 +1257,7 @@ function saveRecord() {
     toast('Record saved! ✅', 'success');
   }
 
-  LS.set(cfg.key, data);
+  DB.set(cfg.key, data);
   setupAdminForm();
   renderAdminTable();
   renderAdminStats();
@@ -1162,13 +1279,13 @@ function saveAttendanceRecord() {
   }
   if (isStaff && !dept) { toast('Please select the department for this record.', 'warn'); return; }
 
-  const sourceList = LS.get(isStaff ? KEY.staff : KEY.students, []);
+  const sourceList = DB.get(isStaff ? KEY.staff : KEY.students, []);
   const person     = sourceList.find(p => p.name.toLowerCase() === name.toLowerCase());
   if (!person) { toast(`${isStaff ? 'Staff' : 'Student'} not found!`, 'error'); return; }
 
-  const attObj  = LS.get(isStaff ? KEY.staffAttendance : KEY.attendance, {});
+  const attObj  = DB.get(isStaff ? KEY.staffAttendance : KEY.attendance, {});
   attObj[`${date}|${person.id}`] = isStaff ? { status, dept } : status;
-  LS.set(isStaff ? KEY.staffAttendance : KEY.attendance, attObj);
+  DB.set(isStaff ? KEY.staffAttendance : KEY.attendance, attObj);
 
   setupAdminForm();
   renderAdminTable();
@@ -1193,7 +1310,7 @@ function renderAdminTable() {
   if (_currentTab === 'attendance' || _currentTab === 'staffAttendance') {
     data = buildAttendanceRows(_currentTab === 'staffAttendance');
   } else {
-    data = LS.get(cfg.key, []);
+    data = DB.get(cfg.key, []);
   }
 
   // Search filter
@@ -1292,8 +1409,8 @@ function renderAdminTable() {
 }
 
 function buildAttendanceRows(isStaff) {
-  const attObj    = LS.get(isStaff ? KEY.staffAttendance : KEY.attendance, {});
-  const people    = LS.get(isStaff ? KEY.staff : KEY.students, []);
+  const attObj    = DB.get(isStaff ? KEY.staffAttendance : KEY.attendance, {});
+  const people    = DB.get(isStaff ? KEY.staff : KEY.students, []);
   const peopleMap = {};
   people.forEach(p => { peopleMap[p.id] = p; });
 
@@ -1323,7 +1440,7 @@ function editRecord(id) {
     toast('To edit attendance, delete and re-mark.', 'info'); return;
   }
 
-  const data = LS.get(cfg.key, []);
+  const data = DB.get(cfg.key, []);
   const rec  = data.find(r => r.id === id);
   if (!rec) return;
 
@@ -1346,12 +1463,12 @@ function deleteRecord(id) {
     const cfg = TAB_CONFIG[_currentTab];
     if (_currentTab === 'attendance' || _currentTab === 'staffAttendance') {
       const key = _currentTab === 'staffAttendance' ? KEY.staffAttendance : KEY.attendance;
-      const attObj = LS.get(key, {});
+      const attObj = DB.get(key, {});
       delete attObj[id];
-      LS.set(key, attObj);
+      DB.set(key, attObj);
     } else {
-      const data = LS.get(cfg.key, []);
-      LS.set(cfg.key, data.filter(r => r.id !== id));
+      const data = DB.get(cfg.key, []);
+      DB.set(cfg.key, data.filter(r => r.id !== id));
     }
     _selectedIds.delete(id);
     renderAdminTable();
@@ -1382,12 +1499,12 @@ function initBulkDelete() {
       const cfg = TAB_CONFIG[_currentTab];
       if (_currentTab === 'attendance' || _currentTab === 'staffAttendance') {
         const key = _currentTab === 'staffAttendance' ? KEY.staffAttendance : KEY.attendance;
-        const attObj = LS.get(key, {});
+        const attObj = DB.get(key, {});
         _selectedIds.forEach(id => delete attObj[id]);
-        LS.set(key, attObj);
+        DB.set(key, attObj);
       } else {
-        const data = LS.get(cfg.key, []);
-        LS.set(cfg.key, data.filter(r => !_selectedIds.has(r.id)));
+        const data = DB.get(cfg.key, []);
+        DB.set(cfg.key, data.filter(r => !_selectedIds.has(r.id)));
       }
       toast(`${_selectedIds.size} records deleted.`, 'warn');
       _selectedIds = new Set();
@@ -1457,7 +1574,7 @@ function getExportData() {
       rows: data.map(r => [r.date, r.personName, r.extra, r.status])
     };
   }
-  data = LS.get(cfg.key, []);
+  data = DB.get(cfg.key, []);
   const headers = cfg.cols.filter(c => c !== 'Photo');
   const rows = data.map(r => cfg.rowCells ? cfg.rowCells(r).slice(1) : headers.map(h => r[h] || ''));
   return { headers, rows };
@@ -1519,7 +1636,7 @@ function initHistory() {
 
 function archiveCurrentMonth() {
   const monthKey  = currentMonthKey();
-  const history   = LS.get(KEY.history, []);
+  const history   = DB.get(KEY.history, []);
 
   if (history.find(h => h.monthKey === monthKey)) {
     showConfirm('Re-archive this month?', 'This will overwrite the existing snapshot.', () => {
@@ -1531,10 +1648,10 @@ function archiveCurrentMonth() {
 }
 
 function doArchive(monthKey) {
-  const students       = LS.get(KEY.students, []);
-  const staff          = LS.get(KEY.staff, []);
-  const attendance     = LS.get(KEY.attendance, {});
-  const staffAtt       = LS.get(KEY.staffAttendance, {});
+  const students       = DB.get(KEY.students, []);
+  const staff          = DB.get(KEY.staff, []);
+  const attendance     = DB.get(KEY.attendance, {});
+  const staffAtt       = DB.get(KEY.staffAttendance, {});
 
   // Filter entries for this month
   const monthPrefix    = monthKey; // "YYYY-MM"
@@ -1567,9 +1684,9 @@ function doArchive(monthKey) {
     staffData:      staffSummary,
   };
 
-  const history = LS.get(KEY.history, []).filter(h => h.monthKey !== monthKey);
+  const history = DB.get(KEY.history, []).filter(h => h.monthKey !== monthKey);
   history.unshift(record);
-  LS.set(KEY.history, history);
+  DB.set(KEY.history, history);
 
   toast(`📦 ${record.label} archived successfully!`, 'success');
   renderHistory();
@@ -1597,7 +1714,7 @@ function renderHistory() {
   const lastBadge  = el('lastArchiveText');
   if (!grid) return;
 
-  let history      = LS.get(KEY.history, []);
+  let history      = DB.get(KEY.history, []);
   const query      = (el('historySearchInput')?.value || '').trim().toLowerCase();
   const typeFilter = el('historyTypeFilter')?.value || 'all';
 
@@ -1659,7 +1776,7 @@ function renderHistory() {
       <div class="history-stats-row">
         ${showStudent ? `<div class="history-stat-box history-stat-student">
           <div class="history-stat-box-top">
-            <i class="ri-user-heart-fill" style="color:#818cf8"></i>
+            <i class="ri-graduation-cap-fill" style="color:#818cf8"></i>
             <span class="history-pct-badge">${sPct}%</span>
           </div>
           <div class="history-stat-num">${h.studentCount}</div>
@@ -1671,7 +1788,7 @@ function renderHistory() {
         </div>` : ''}
         ${showStaff ? `<div class="history-stat-box history-stat-staff">
           <div class="history-stat-box-top">
-            <i class="ri-team-fill" style="color:#34d399"></i>
+            <i class="ri-group-fill" style="color:#34d399"></i>
             <span class="history-pct-badge">${tPct}%</span>
           </div>
           <div class="history-stat-num">${h.staffCount}</div>
@@ -1700,7 +1817,7 @@ window.toggleHistoryPreview = function (btn, id) {
   const isOpen = panel.style.display !== 'none';
   if (isOpen) { panel.style.display = 'none'; btn.innerHTML = '<i class="ri-eye-fill"></i> Preview Data'; return; }
 
-  const history = LS.get(KEY.history, []);
+  const history = DB.get(KEY.history, []);
   const h       = history.find(x => x.id === id);
   if (!h) return;
 
@@ -1736,7 +1853,7 @@ window.exportHistoryPDF = function (id, type) {
   try {
     if (!window.jspdf) { toast('jsPDF library not loaded.', 'error'); return; }
     const { jsPDF } = window.jspdf;
-    const history = LS.get(KEY.history, []);
+    const history = DB.get(KEY.history, []);
     const h       = history.find(x => x.id === id);
     if (!h) return;
 
@@ -1760,8 +1877,8 @@ window.exportHistoryPDF = function (id, type) {
 
 window.deleteHistory = function (id) {
   showConfirm('Delete this archive?', 'This snapshot will be permanently removed.', () => {
-    const history = LS.get(KEY.history, []).filter(h => h.id !== id);
-    LS.set(KEY.history, history);
+    const history = DB.get(KEY.history, []).filter(h => h.id !== id);
+    DB.set(KEY.history, history);
     renderHistory();
     renderAdminStats();
     toast('Archive deleted.', 'warn');
@@ -1770,7 +1887,7 @@ window.deleteHistory = function (id) {
 
 window.exportHistoryExcel = function (id, type) {
   if (!window.XLSX) { toast('XLSX library not loaded.', 'error'); return; }
-  const history = LS.get(KEY.history, []);
+  const history = DB.get(KEY.history, []);
   const h       = history.find(x => x.id === id);
   if (!h) return;
 
@@ -1789,8 +1906,8 @@ window.exportHistoryExcel = function (id, type) {
    25. AUTO ARCHIVE (new month detection)
 ────────────────────────────────────────── */
 function checkAutoArchive() {
-  const history    = LS.get(KEY.history, []);
-  const lastKey    = LS.get('sc_last_active_month', null);
+  const history    = DB.get(KEY.history, []);
+  const lastKey    = DB.get('sc_last_active_month', null);
   const thisMonth  = currentMonthKey();
 
   if (lastKey && lastKey !== thisMonth) {
@@ -1798,7 +1915,7 @@ function checkAutoArchive() {
     doArchive(lastKey);
     toast(`Auto-archived ${formatMonthYear(lastKey)} 📦`, 'info');
   }
-  LS.set('sc_last_active_month', thisMonth);
+  DB.set('sc_last_active_month', thisMonth);
 }
 
 /* ──────────────────────────────────────────
@@ -1865,8 +1982,14 @@ function assignToolbarId() {
 /* ──────────────────────────────────────────
    29. INIT — ENTRY POINT
 ────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', () => {
-  seedData();
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await hydrateDataFromBackend();
+  } catch (err) {
+    console.error('Backend connection failed:', err);
+    toast('Backend/MongoDB connection failed. Start the server and MongoDB.', 'error');
+  }
+  await seedData();
   assignToolbarId();
   updateDateDisplays();
   checkAutoArchive();
