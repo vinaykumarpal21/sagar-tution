@@ -1,60 +1,45 @@
 /* ================================================================
-   SAGAR CLASSES — MASTER SCRIPT v3.0
-   Storage  : Express API + MongoDB (no localStorage/sessionStorage)
-   Icons    : Remix Icons (ri-*) — all updated
+   SAGAR CLASSES — STATIC EDITION
+   Storage  : Browser localStorage (static / no backend required)
    Features : Admin CRUD, Attendance, Toppers, Staff, Notices,
-              Archive / History, Export (Excel/PDF/CSV), Themes
+              Monthly Archive / History, Export, Themes
    ================================================================ */
 
 'use strict';
 
 /* ──────────────────────────────────────────
-   1. BACKEND + MONGODB DATA STORE
-   Browser storage has been completely removed.
-   The frontend keeps a temporary in-memory cache backed by MongoDB and
-   persists every change through the Express API.
+   1. LOCAL DATA STORE
+   Everything is stored in the browser's localStorage. The site can run
+   directly as a static website without Node.js, Express or MongoDB.
 ────────────────────────────────────────── */
-const API_BASE = '/api';
-const _dbCache = Object.create(null);
-
 const DB = {
   get(key, fallback = null) {
-    return Object.prototype.hasOwnProperty.call(_dbCache, key) ? _dbCache[key] : fallback;
+    try {
+      const raw = localStorage.getItem(key);
+      return raw === null ? fallback : JSON.parse(raw);
+    } catch (err) {
+      console.error(`Failed to read ${key}:`, err);
+      return fallback;
+    }
   },
-  set(key, val) {
-    _dbCache[key] = val;
-    return apiRequest(`/store/${encodeURIComponent(key)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ value: val }),
-    }).catch(err => {
+  set(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (err) {
       console.error(`Failed to save ${key}:`, err);
-      toast?.('Database save failed. Check backend connection.', 'error');
-    });
+      toast?.('Browser storage is full or unavailable.', 'error');
+    }
+    return Promise.resolve(value);
   },
   remove(key) {
-    delete _dbCache[key];
-    return apiRequest(`/store/${encodeURIComponent(key)}`, { method: 'DELETE' })
-      .catch(err => console.error(`Failed to delete ${key}:`, err));
+    try { localStorage.removeItem(key); } catch (err) { console.error(err); }
+    return Promise.resolve();
   }
 };
 
-async function apiRequest(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options,
-  });
-  if (!res.ok) {
-    let message = `API request failed (${res.status})`;
-    try { message = (await res.json()).message || message; } catch {}
-    throw new Error(message);
-  }
-  if (res.status === 204) return null;
-  return res.json();
-}
-
+// Kept as a compatibility no-op so existing initialization stays clean.
 async function hydrateDataFromBackend() {
-  const data = await apiRequest('/store');
-  Object.assign(_dbCache, data || {});
+  return true;
 }
 
 /* ──────────────────────────────────────────
@@ -134,17 +119,17 @@ async function seedData() {
     ]);
   }
   const defaultBatches = [
-    { id:'B01', name:'Class 1st – 5th', group:'Foundation Batch', desc:'Strong foundations in English, Mathematics, EVS and creative learning through age-appropriate activities.', img:'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?auto=format&fit=crop&w=900&q=85', classes:['1','2','3','4','5'] },
-    { id:'B02', name:'Class 6th – 8th', group:'Middle School Batch', desc:'Concept-focused learning in Mathematics, Science, English and Social Science with regular practice.', img:'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=900&q=85', classes:['6','7','8'] },
-    { id:'B03', name:'Class 9th – 10th', group:'Board Preparation Batch', desc:'Focused SSC board preparation with concept clarity, weekly tests, revision and personal mentoring.', img:'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=900&q=85', classes:['9','10'] },
+    { id:'B01', name:'Class 1st – 5th', group:'Foundation Batch', desc:'Strong foundations in English, Mathematics, EVS and creative learning through age-appropriate activities.', img:'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=900&q=85', classes:['1','2','3','4','5'] },
+    { id:'B02', name:'Class 6th – 8th', group:'Middle School Batch', desc:'Concept-focused learning in Mathematics, Science, English and Social Science with regular practice.', img:'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=900&q=85', classes:['6','7','8'] },
+    { id:'B03', name:'Class 9th – 10th', group:'Board Preparation Batch', desc:'Focused SSC board preparation with concept clarity, weekly tests, revision and personal mentoring.', img:'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=900&q=85', classes:['9','10'] },
     { id:'B04', name:'Class 11th – 12th Science', group:'HSC Science Batch', desc:'Stream-specific Science coaching with strong preparation in Physics, Chemistry, Mathematics and Biology.', img:'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=900&q=85', classes:['11','12'], stream:'Science' },
     { id:'B05', name:'Class 11th – 12th Commerce', group:'HSC Commerce Batch', desc:'Complete Commerce preparation covering Accountancy, Economics, Business Studies and Mathematics.', img:'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=900&q=85', classes:['11','12'], stream:'Commerce' }
   ];
   const savedClasses = DB.get(KEY.classes);
   const batchVersion = DB.get('sc_classes_version');
-  if (!savedClasses || batchVersion !== 'batch-groups-v1') {
+  if (!savedClasses || batchVersion !== 'batch-groups-v2') {
     await DB.set(KEY.classes, defaultBatches);
-    await DB.set('sc_classes_version', 'batch-groups-v1');
+    await DB.set('sc_classes_version', 'batch-groups-v2');
   }
   if (!DB.get(KEY.functions)) {
     await DB.set(KEY.functions, [
@@ -160,7 +145,7 @@ async function seedData() {
   }
   // Normalize legacy event records so old records also use category-appropriate images.
   const eventImages = {
-    Picnic:'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=900&q=85',
+    Picnic:'https://images.unsplash.com/photo-1504150558240-0b4fd8946624?auto=format&fit=crop&w=900&q=85',
     Festival:'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=85',
     Academic:'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=900&q=85',
     Sports:'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=900&q=85',
@@ -414,7 +399,7 @@ function renderBatches() {
    10. FUNCTIONS & EVENTS RENDER
 ────────────────────────────────────────── */
 const EVENT_CATEGORY_IMAGES = {
-  Picnic:'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=900&q=85',
+  Picnic:'https://images.unsplash.com/photo-1504150558240-0b4fd8946624?auto=format&fit=crop&w=900&q=85',
   Festival:'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=85',
   Academic:'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=900&q=85',
   Sports:'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=900&q=85',
@@ -422,6 +407,18 @@ const EVENT_CATEGORY_IMAGES = {
   PTM:'https://images.unsplash.com/photo-1529390079861-591de354faf5?auto=format&fit=crop&w=900&q=85',
   'National Day':'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=900&q=85'
 };
+
+function eventIcon(category) {
+  return ({
+    Picnic: 'https://images.unsplash.com/photo-1504150558240-0b4fd8946624?auto=format&fit=crop&w=900&q=85',
+    Festival: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=85',
+    Academic: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=900&q=85',
+    Sports: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=900&q=85',
+    Cultural: 'https://images.unsplash.com/photo-1503095396549-807759245b35?auto=format&fit=crop&w=900&q=85',
+    PTM: 'https://images.unsplash.com/photo-1529390079861-591de354faf5?auto=format&fit=crop&w=900&q=85',
+    'National Day': 'ri-flag-fill'
+  })[category] || 'ri-calendar-event-fill';
+}
 
 function renderFunctions() {
   const container = el('functionsDisplayContainer');
@@ -441,7 +438,7 @@ function renderFunctions() {
         <h3 class="event-title">${ev.name}</h3>
         <p class="event-desc">${ev.desc || ''}</p>
         <div class="event-footer-row">
-          <span class="event-campus-tag"><i class="ri-calendar-schedule-fill" style="color:#f97316"></i> Sagar Classes Campus</span>
+          <span class="event-campus-tag"><i class="event-category-icon ${eventIcon(ev.category)}" style="color:#f97316"></i> Sagar Classes Campus</span>
           <button class="p-btn event-more-btn" data-goto="contact" style="padding:4px 12px;font-size:0.75rem;">Know More</button>
         </div>
       </div>
@@ -457,51 +454,46 @@ function renderToppers() {
   if (!display) return;
 
   const toppers = DB.get(KEY.toppers, []);
-
   if (!toppers.length) {
-    display.innerHTML = `<div class="empty-state"><i class="ri-award-fill" style="color:#fbbf24;font-size:2.5rem;display:block;margin-bottom:0.5rem"></i><p>No toppers added yet.</p></div>`;
+    display.innerHTML = `<div class="empty-state"><i class="ri-award-fill" style="color:#fbbf24;font-size:2.5rem;display:block;margin-bottom:.5rem"></i><p>No toppers added yet.</p></div>`;
     if (spotlight) spotlight.innerHTML = '';
     return;
   }
 
-  // First topper is highlighted, while every topper keeps the complete
-  // score/marks value supplied by the admin without truncation.
+  const ordinal = rank => rank === 1 ? '1st' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`;
+  const congratulations = rank => rank <= 2
+    ? `Congratulations on securing ${ordinal(rank)} place! 🎉`
+    : `Congratulations on your excellent achievement! 🎉`;
+
   if (spotlight && toppers[0]) {
     const t = toppers[0];
     spotlight.innerHTML = `
       <div class="topper-spotlight">
         <div class="topper-spotlight-glow"></div>
-        <div class="topper-spotlight-medal" aria-label="Topper">
-          <i class="ri-medal-2-fill"></i><span>1st</span>
-        </div>
+        <div class="topper-spotlight-medal"><i class="ri-medal-2-fill"></i><span>1st</span></div>
         <img class="topper-spotlight-photo" src="${t.img || 'sagar.jpeg'}" alt="${t.name}" onerror="this.src='sagar.jpeg'">
         <div class="topper-spotlight-body">
-          <span class="topper-spotlight-tag"><i class="ri-vip-crown-2-fill"></i> Topper of the Term</span>
+          <span class="topper-spotlight-tag"><i class="ri-vip-crown-2-fill"></i> Top Performer</span>
           <h2>${t.name}</h2>
           <p class="topper-spotlight-standard">Class ${t.class}</p>
-          <div class="topper-spotlight-score-box">
-            <span class="score-label">Marks / Score</span>
-            <strong>${t.score}</strong>
-          </div>
+          <div class="topper-score-box"><span>Marks / Score</span><strong>${t.score}</strong></div>
+          <p class="topper-congratulations">${congratulations(1)}<br>We are proud of your dedication and hard work.</p>
         </div>
       </div>`;
   }
 
-  const medalClasses = ['gold', 'silver', 'bronze'];
-  const medalIcons = ['ri-medal-2-fill', 'ri-medal-2-fill', 'ri-medal-2-fill'];
-
   display.innerHTML = toppers.map((t, i) => {
     const rank = i + 1;
-    const medal = medalClasses[i] || 'other';
+    const medal = ['gold', 'silver', 'bronze'][i] || 'other';
     return `
-      <article class="facility-card topper-card animate-hover-up" aria-label="${rank} rank topper">
-        <div class="topper-medal topper-medal-${medal}">
-          <i class="${medalIcons[i] || 'ri-award-fill'}"></i>
-          <span>${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'}</span>
+      <article class="facility-card topper-card" aria-label="${ordinal(rank)} rank topper">
+        <div class="topper-rank-top topper-rank-${medal}">
+          <i class="ri-medal-2-fill" aria-hidden="true"></i>
+          <span>${ordinal(rank)}</span>
         </div>
-        <img class="topper-photo" src="${t.img || 'sagar.jpeg'}" alt="${t.name}" onerror="this.src='sagar.jpeg'">
-        <span class="notice-tag topper-standard-tag">Class ${t.class}</span>
+        <img class="topper-photo" src="${t.img || 'sagar.jpeg'}" alt="${t.name}" loading="lazy" onerror="this.src='sagar.jpeg'">
         <h3 title="${t.name}">${t.name}</h3>
+        <div class="topper-class">Class ${t.class}</div>
         <div class="topper-score-box">
           <span>Marks / Score</span>
           <strong>${t.score}</strong>
@@ -509,6 +501,7 @@ function renderToppers() {
       </article>`;
   }).join('');
 }
+
 /* ──────────────────────────────────────────
    12. STUDENT ATTENDANCE SECTION (Login-gated, mirrors Staff Portal)
 ────────────────────────────────────────── */
@@ -532,17 +525,17 @@ function renderStudentLogin(container) {
   container.innerHTML = `
     <div class="student-login-card">
       <div class="student-login-head">
-        <div class="attendance-login-single-icon student" aria-hidden="true"><i class="ri-login-circle-line"></i></div>
+        <div class="attendance-login-single-icon student" aria-hidden="true"><i class="ri-graduation-cap-fill"></i></div>
         <h3>Student Attendance Portal</h3>
         <p>Login securely with your Name and Standard.</p>
       </div>
       <div class="student-login-fields">
         <div>
-          <label class="form-label"><i class="ri-account-circle-line"></i> Full Name</label>
+          <label class="form-label"><i class="ri-user-smile-fill"></i> Full Name</label>
           <input type="text" id="loginStudentName" class="pill-input" placeholder="e.g. Aarav Sharma">
         </div>
         <div>
-          <label class="form-label"><i class="ri-book-open-line"></i> Standard / Class</label>
+          <label class="form-label"><i class="ri-school-fill"></i> Standard / Class</label>
           <select id="loginStudentClass" class="pill-input">
             <option value="">Select Standard</option>
             ${[1,2,3,4,5,6,7,8,9,10,11,12].map(n => `<option value="${n}">Class ${n}</option>`).join('')}
@@ -767,13 +760,13 @@ function renderStaffLogin(container) {
   container.innerHTML = `
     <div class="student-login-card staff-login-card">
       <div class="student-login-head">
-        <div class="attendance-login-single-icon staff" aria-hidden="true"><i class="ri-login-circle-line"></i></div>
+        <div class="attendance-login-single-icon staff" aria-hidden="true"><i class="ri-user-star-fill"></i></div>
         <h3>Staff Attendance Login</h3>
         <p>Login with your registered name and department.</p>
       </div>
       <div class="student-login-fields">
         <div>
-          <label class="form-label"><i class="ri-user-3-line"></i> Staff Full Name</label>
+          <label class="form-label"><i class="ri-user-star-fill"></i> Staff Full Name</label>
           <input type="text" id="loginStaffName" class="pill-input" placeholder="e.g. Sagar Sir">
         </div>
         <div>
@@ -1903,17 +1896,18 @@ window.exportHistoryExcel = function (id, type) {
 };
 
 /* ──────────────────────────────────────────
-   25. AUTO ARCHIVE (new month detection)
+   25. AUTO ARCHIVE (month change detection)
 ────────────────────────────────────────── */
 function checkAutoArchive() {
-  const history    = DB.get(KEY.history, []);
-  const lastKey    = DB.get('sc_last_active_month', null);
-  const thisMonth  = currentMonthKey();
+  const lastKey = DB.get('sc_last_active_month', null);
+  const thisMonth = currentMonthKey();
 
   if (lastKey && lastKey !== thisMonth) {
-    // Month changed — auto-archive last month
-    doArchive(lastKey);
-    toast(`Auto-archived ${formatMonthYear(lastKey)} 📦`, 'info');
+    const history = DB.get(KEY.history, []);
+    if (!history.some(h => h.monthKey === lastKey)) {
+      doArchive(lastKey);
+      toast(`Auto-archived ${formatMonthYear(lastKey)} 📦`, 'info');
+    }
   }
   DB.set('sc_last_active_month', thisMonth);
 }
@@ -1983,16 +1977,13 @@ function assignToolbarId() {
    29. INIT — ENTRY POINT
 ────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    await hydrateDataFromBackend();
-  } catch (err) {
-    console.error('Backend connection failed:', err);
-    toast('Backend/MongoDB connection failed. Start the server and MongoDB.', 'error');
-  }
+  await hydrateDataFromBackend();
   await seedData();
   assignToolbarId();
   updateDateDisplays();
   checkAutoArchive();
+  // If the page remains open across midnight/month-end, archive as soon as the month changes.
+  setInterval(checkAutoArchive, 60 * 1000);
 
   initTheme();
   initNav();
@@ -2014,5 +2005,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupAdminForm();
   renderAdminTable();
 
-  console.log('%c🎓 Sagar Classes Portal v3.0 — Ready!', 'color:#6366f1;font-weight:bold;font-size:14px');
+  console.log('%c🎓 Sagar Classes Portal v4.0 — Ready!', 'color:#6366f1;font-weight:bold;font-size:14px');
 });
